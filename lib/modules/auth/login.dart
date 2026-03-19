@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../home/home.dart';
+import '../Map/map_screen.dart';
 import '../../widgets/input_field.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -73,12 +74,13 @@ class _LoginScreenState extends State<LoginScreen>
     if (result['success'] == true) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(
+        MaterialPageRoute<MoviMap>(builder: (_) => MoviMap(
+              usuario: result['usuario'] as Map<String, dynamic>,
+        )),
+        /* HomeScreen(
             usuario: result['usuario'] as Map<String, dynamic>,
-            modulos: result['modulos'] as List<dynamic>,
-          ),
-        ),
+            modulos: result['modulos'] as List<dynamic> ,
+          ),*/
       );
     } else {
       setState(() => _error = result['message'] ?? 'Credenciales inválidas.');
