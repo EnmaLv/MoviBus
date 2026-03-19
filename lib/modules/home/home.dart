@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../auth/login.dart';
+import '../../widgets/app_bar.dart'; // ajusta el path si es distinto
 
 class HomeScreen extends StatelessWidget {
   final Map<String, dynamic> usuario;
@@ -25,7 +26,10 @@ class HomeScreen extends StatelessWidget {
               if (context.mounted) {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        LoginScreen(themeProvider: AppThemeProvider()),
+                  ),
                 );
               }
             },

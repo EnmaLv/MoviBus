@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
-import '../home/home.dart';
-import '../Map/map_screen.dart';
+import '../../widgets/app_bar.dart'; // donde está AppThemeProvider
 import '../../widgets/input_field.dart';
+import '../Map/map_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  // ── Recibe el themeProvider desde main.dart ───────────────────────────────
+  final AppThemeProvider themeProvider;
+
+  const LoginScreen({super.key, required this.themeProvider});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -13,21 +16,21 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  static const colorRed = Color(0xFFB71C1C);
+  static const colorRed      = Color(0xFFB71C1C);
   static const colorRedLight = Color(0xFFD32F2F);
-  static const colorBg = Color(0xFFF5F5F5);
-  static const colorText = Color(0xFF1A1A1A);
-  static const colorSubtext = Color(0xFF666666);
+  static const colorBg       = Color(0xFFF5F5F5);
+  static const colorText     = Color(0xFF1A1A1A);
+  static const colorSubtext  = Color(0xFF666666);
 
-  final _emailCtrl = TextEditingController();
+  final _emailCtrl    = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
   bool _obscure = true;
   String? _error;
 
   late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+  late Animation<double>   _fadeAnim;
+  late Animation<Offset>   _slideAnim;
 
   @override
   void initState() {
@@ -53,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleLogin() async {
-    final email = _emailCtrl.text.trim();
+    final email    = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
@@ -61,10 +64,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
 
     final result = await ApiService.login(email, password);
 
@@ -74,13 +74,13 @@ class _LoginScreenState extends State<LoginScreen>
     if (result['success'] == true) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute<MoviMap>(builder: (_) => MoviMap(
-              usuario: result['usuario'] as Map<String, dynamic>,
-        )),
-        /* HomeScreen(
+        MaterialPageRoute(
+          builder: (_) => MoviMap(
+            // ── Pasa el mismo themeProvider que recibiste ─────────────────
+            themeProvider: widget.themeProvider,
             usuario: result['usuario'] as Map<String, dynamic>,
-            modulos: result['modulos'] as List<dynamic> ,
-          ),*/
+          ),
+        ),
       );
     } else {
       setState(() => _error = result['message'] ?? 'Credenciales inválidas.');
@@ -89,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final size   = MediaQuery.of(context).size;
     final isWide = size.width > 768;
 
     return Scaffold(
@@ -105,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // Tablet / escritorio — igual a la web: blanco izq | imagen oscura der
   Widget _buildWideLayout() {
     return Row(
       children: [
@@ -124,8 +123,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // Panel derecho: fondo negro + imagen semitransparente + texto (réplica exacta del ::before CSS)
-
   Widget _buildCard() {
     return FadeTransition(
       opacity: _fadeAnim,
@@ -136,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Ícono circular con gradiente rojo — réplica exacta del .user-icon
+              // Avatar
               Container(
                 width: 96,
                 height: 96,
@@ -179,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen>
 
               const SizedBox(height: 32),
 
-              // Error box — réplica de .error-message con borde izquierdo rojo
+              // Error
               if (_error != null) ...[
                 Container(
                   width: double.infinity,
@@ -233,7 +230,6 @@ class _LoginScreenState extends State<LoginScreen>
                 onSubmitted: (_) => _handleLogin(),
               ),
 
-              // ¿Olvidaste tu contraseña? — alineado a la derecha como en la web
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -251,7 +247,7 @@ class _LoginScreenState extends State<LoginScreen>
 
               const SizedBox(height: 8),
 
-              // Botón INICIAR SESIÓN — gradiente rojo con sombra
+              // Botón login
               SizedBox(
                 width: double.infinity,
                 height: 50,
