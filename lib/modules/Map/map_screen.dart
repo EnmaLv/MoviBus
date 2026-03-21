@@ -1,17 +1,18 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 import 'package:flutter/services.dart';
+
 import '../../services/api_service.dart';
 import '../auth/login.dart';
 import '../../widgets/app_bar.dart';
 import 'models/bus_model.dart';
 import 'data/buses_mock.dart';
-
 import '../../widgets/bus_info_card.dart';
 import '../../widgets/start_route_button.dart';
 import '../../widgets/top_overlay.dart';
+
+import '../Bus/bus_catalogo_screen.dart';
 
 class MoviMap extends StatefulWidget {
   final Map<String, dynamic> usuario;
@@ -124,7 +125,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     });
   }
 
-  // Todos ven el botón de momento (luego filtra por rol conductor)
   bool get _verBotonIniciarRuta => true;
 
   String? get _rolNombre {
@@ -151,12 +151,7 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   static const _adminItems = [
     NavItem(label: 'Mapa', icon: Icons.map_outlined, activeIcon: Icons.map),
     NavItem(
-      label: 'Agenda',
-      icon: Icons.calendar_today_outlined,
-      activeIcon: Icons.calendar_today,
-    ),
-    NavItem(
-      label: 'Vehículos',
+      label: 'Catalogo',
       icon: Icons.directions_bus_outlined,
       activeIcon: Icons.directions_bus,
     ),
@@ -164,6 +159,11 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       label: 'Rutas',
       icon: Icons.route_outlined,
       activeIcon: Icons.route,
+    ),
+    NavItem(
+      label: 'Agenda',
+      icon: Icons.calendar_today_outlined,
+      activeIcon: Icons.calendar_today,
     ),
     NavItem(
       label: 'Conductores',
@@ -187,6 +187,54 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     ),
   ];
 
+  void _onNavTap(int index) {
+    if (index == _currentIndex && index == 0) return;
+    if (index == 0) {
+      setState(() {
+        _currentIndex = 0;
+        _busSeleccionado = null;
+      });
+      return;
+    }
+
+    if (_esAdmin) {
+      _abrirModuloAdmin(index);
+      return;
+    }
+
+    setState(() => _currentIndex = index);
+  }
+
+  void _abrirModuloAdmin(int index) {
+    Widget? destino;
+
+    switch (index) {
+      case 1:
+        destino = BusCatalogoScreen(themeProvider: widget.themeProvider);
+        break;
+      // case 3: destino = const BusRutasScreen(); break;
+      // case 4: destino = const ConductoresScreen(); break;
+      // case 5: destino = const CombustibleScreen(); break;
+      // case 6: destino = const MantenimientoScreen(); break;
+      // case 7: destino = const ReportesScreen(); break;
+      default:
+        // Módulo aún no implementado
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${_adminItems[index].label}: próximamente'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFB71C1C),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+    }
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => destino!));
+  }
+
   Widget _buildPage(int index) {
     if (index == 0) return _buildMapPage();
     return Center(
@@ -197,7 +245,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   Widget _buildMapPage() {
     return Stack(
       children: [
-        // Mapa
         GoogleMap(
           initialCameraPosition: _initialPosition,
           onMapCreated: (c) => mapController = c,
@@ -207,29 +254,14 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
           padding: EdgeInsets.only(bottom: _verBotonIniciarRuta ? 80 : 16),
         ),
 
-        /* Positioned(
-          right: 16,
-          bottom: _verBotonIniciarRuta ? 100 : 32,
-          child: _MapIconButton(
-            icon: Icons.my_location,
-            onTap: () {
-              _mapController?.animateCamera(
-                CameraUpdate.newCameraPosition(_initialPosition),
-              );
-            },
-          ),
-        ), */
-
-        // Card info del bus seleccionado
         if (_busSeleccionado != null)
           Positioned(
             left: 16,
             right: 16,
-            bottom: _verBotonIniciarRuta ? 16 : 16,
+            bottom: 16,
             child: BusInfoCard(bus: _busSeleccionado!, onClose: _cerrarInfoBus),
           ),
 
-        // Botón INICIAR RUTA — solo visible en el mapa
         if (_verBotonIniciarRuta && _busSeleccionado == null)
           Positioned(
             left: 24,
@@ -259,12 +291,11 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
         children: [
           _buildPage(_currentIndex),
 
-          // Overlay superior (solo en mapa)
           if (_currentIndex == 0)
             Positioned(
               top: MediaQuery.of(context).padding.top + 12,
               left: 16,
-              right: 16, // deja espacio para la leyenda
+              right: 16,
               child: TopOverlay(
                 usuario: widget.usuario,
                 esAdmin: _esAdmin,
@@ -278,12 +309,7 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       bottomNavigationBar: AppBottomNav(
         items: _navItems,
         currentIndex: _currentIndex,
-        onTap: (i) {
-          setState(() {
-            _currentIndex = i;
-            _busSeleccionado = null;
-          });
-        },
+        onTap: _onNavTap, 
         themeProvider: widget.themeProvider,
         userName: widget.usuario['nombre'] as String?,
         userRole: _rolNombre,

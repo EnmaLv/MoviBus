@@ -62,7 +62,6 @@ class AppBottomNav extends StatefulWidget {
 
 class _AppBottomNavState extends State<AppBottomNav>
     with SingleTickerProviderStateMixin {
-
   bool _expanded = false;
   late AnimationController _expandCtrl;
   late Animation<double> _expandAnim;
@@ -101,11 +100,15 @@ class _AppBottomNavState extends State<AppBottomNav>
     return ListenableBuilder(
       listenable: widget.themeProvider,
       builder: (context, _) {
-        final isDark  = widget.themeProvider.isDark;
+        final isDark = widget.themeProvider.isDark;
         final bgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
-        final divider = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEEEEEE);
+        final divider = isDark
+            ? const Color(0xFF2C2C2C)
+            : const Color(0xFFEEEEEE);
         final textCol = isDark ? Colors.white : const Color(0xFF1A1A1A);
-        final subCol  = isDark ? const Color(0xFF888888) : const Color(0xFF666666);
+        final subCol = isDark
+            ? const Color(0xFF888888)
+            : const Color(0xFF666666);
 
         return AnimatedBuilder(
           animation: _expandAnim,
@@ -213,8 +216,9 @@ class _NavBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inactiveCol =
-        isDark ? const Color(0xFF666666) : const Color(0xFF999999);
+    final inactiveCol = isDark
+        ? const Color(0xFF666666)
+        : const Color(0xFF999999);
 
     return GestureDetector(
       onTap: () {
@@ -310,8 +314,9 @@ class _ExpandButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inactiveCol =
-        isDark ? const Color(0xFF666666) : const Color(0xFF999999);
+    final inactiveCol = isDark
+        ? const Color(0xFF666666)
+        : const Color(0xFF999999);
 
     return GestureDetector(
       onTap: onTap,
@@ -371,7 +376,7 @@ class _ExpandedPanel extends StatelessWidget {
   final Color subCol;
   final bool isDark;
 
-  static const _red      = Color(0xFFB71C1C);
+  static const _red = Color(0xFFB71C1C);
   static const _redLight = Color(0xFFD32F2F);
 
   const _ExpandedPanel({
@@ -426,7 +431,7 @@ class _ExpandedPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        userName ?? 'Usuario',
+                        userName ?? 'Preferencias (Claro/Oscuro)',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -488,8 +493,8 @@ class _ExpandedPanel extends StatelessWidget {
                     color: isActive
                         ? _red.withValues(alpha: 0.1)
                         : (isDark
-                            ? const Color(0xFF2A2A2A)
-                            : const Color(0xFFF8F8F8)),
+                              ? const Color(0xFF2A2A2A)
+                              : const Color(0xFFF8F8F8)),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: isActive
