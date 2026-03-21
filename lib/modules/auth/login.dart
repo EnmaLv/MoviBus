@@ -5,7 +5,6 @@ import '../../widgets/input_field.dart';
 import '../Map/map_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  // ── Recibe el themeProvider desde main.dart ───────────────────────────────
   final AppThemeProvider themeProvider;
 
   const LoginScreen({super.key, required this.themeProvider});
@@ -76,9 +75,9 @@ class _LoginScreenState extends State<LoginScreen>
         context,
         MaterialPageRoute(
           builder: (_) => MoviMap(
-            // ── Pasa el mismo themeProvider que recibiste ─────────────────
             themeProvider: widget.themeProvider,
             usuario: result['usuario'] as Map<String, dynamic>,
+            roles: result['roles'] as List<dynamic>? ?? [],
           ),
         ),
       );

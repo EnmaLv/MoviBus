@@ -1,32 +1,33 @@
 import 'package:flutter/material.dart';
 import 'modules/auth/login.dart';
-import 'widgets/app_bar.dart'; // donde vive AppThemeProvider
+import 'widgets/app_bar.dart';
 
-void main() {
-  runApp(const BusApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final themeProvider = AppThemeProvider();
+  await themeProvider.loadPrefs();
+
+  runApp(BusApp(themeProvider: themeProvider));
 }
 
 class BusApp extends StatefulWidget {
-  const BusApp({super.key});
+  final AppThemeProvider themeProvider;
+  const BusApp({super.key, required this.themeProvider});
 
   @override
   State<BusApp> createState() => _BusAppState();
 }
 
 class _BusAppState extends State<BusApp> {
-  // Creado una sola vez aquí — se pasa a todas las pantallas
-  final _themeProvider = AppThemeProvider();
-
   @override
   void initState() {
     super.initState();
-    // Cuando el tema cambie, reconstruye el MaterialApp
-    _themeProvider.addListener(() => setState(() {}));
+    widget.themeProvider.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _themeProvider.dispose();
+    widget.themeProvider.dispose();
     super.dispose();
   }
 
@@ -35,7 +36,7 @@ class _BusAppState extends State<BusApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'UPTP Bienestar',
-      themeMode: _themeProvider.themeMode,
+      themeMode: widget.themeProvider.themeMode,
       theme: ThemeData(
         brightness: Brightness.light,
         fontFamily: 'Roboto',
@@ -55,7 +56,7 @@ class _BusAppState extends State<BusApp> {
         scaffoldBackgroundColor: const Color(0xFF121212),
         useMaterial3: true,
       ),
-      home: LoginScreen(themeProvider: _themeProvider),
+      home: LoginScreen(themeProvider: widget.themeProvider),
     );
   }
 }
