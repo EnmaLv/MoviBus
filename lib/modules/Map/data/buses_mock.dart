@@ -3,7 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 const busesSimulados = [
   BusEnMapa(
-    id: 'bus_1',
+    id: 'bus_1', 
     placa: 'AB-123-CD',
     rutaNombre: 'Sede Principal → Anexo Norte',
     posicion: LatLng(9.548200, -69.190100),
