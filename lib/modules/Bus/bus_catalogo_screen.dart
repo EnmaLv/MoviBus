@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../widgets/app_bar.dart';
-import 'bus_brand.dart';
-// import 'bus_model_screen.dart';
-// import 'bus_fuel_type_screen.dart';
+import 'bus_brand_screen.dart';
+import 'bus_model_screen.dart';
+// import 'bus_fuel_type_screen.dart'; // descomenta cuando lo implementes
 
 const _catalogoItems = [
   NavItem(
@@ -24,7 +24,6 @@ const _catalogoItems = [
 
 class BusCatalogoScreen extends StatefulWidget {
   final AppThemeProvider themeProvider;
-
   const BusCatalogoScreen({super.key, required this.themeProvider});
 
   @override
@@ -45,27 +44,6 @@ class _BusCatalogoScreenState extends State<BusCatalogoScreen> {
     'Catálogo · Modelos',
     'Catálogo · Combustible',
   ];
-
-  Widget _buildPages() {
-    return IndexedStack(
-      index: _currentIndex,
-      children: [
-        const _BusMarcaBody(),
-
-        _Placeholder(
-          icon: Icons.car_repair_outlined,
-          titulo: 'Modelos',
-          subtitulo: 'Próximamente podrás gestionar\nlos modelos de vehículos.',
-        ),
-
-        _Placeholder(
-          icon: Icons.local_gas_station_outlined,
-          titulo: 'Tipo de Combustible',
-          subtitulo: 'Próximamente podrás gestionar\nlos tipos de combustible.',
-        ),
-      ],
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,8 +81,17 @@ class _BusCatalogoScreenState extends State<BusCatalogoScreen> {
           ),
         ),
       ),
-
-      body: _buildPages(),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [
+          // ── Cada pestaña es un StatefulWidget con su propio Navigator ──────
+          // Esto evita el crash: nunca se pone Navigator directamente
+          // en el IndexedStack, siempre va envuelto en su widget propio.
+          _TabMarcas(),
+          _TabModelos(),
+          _TabCombustible(),
+        ],
+      ),
       bottomNavigationBar: AppBottomNav(
         items: _catalogoItems,
         currentIndex: _currentIndex,
@@ -115,14 +102,9 @@ class _BusCatalogoScreenState extends State<BusCatalogoScreen> {
   }
 }
 
-class _BusMarcaBody extends StatefulWidget {
-  const _BusMarcaBody();
-
-  @override
-  State<_BusMarcaBody> createState() => _BusMarcaBodyState();
-}
-
-class _BusMarcaBodyState extends State<_BusMarcaBody> {
+// ─── Pestaña Marcas ───────────────────────────────────────────────────────────
+class _TabMarcas extends StatelessWidget {
+  const _TabMarcas();
   @override
   Widget build(BuildContext context) {
     return Navigator(
@@ -132,11 +114,41 @@ class _BusMarcaBodyState extends State<_BusMarcaBody> {
   }
 }
 
+// ─── Pestaña Modelos ──────────────────────────────────────────────────────────
+class _TabModelos extends StatelessWidget {
+  const _TabModelos();
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      onGenerateRoute: (_) =>
+          MaterialPageRoute(builder: (_) => const BusModeloScreen()),
+    );
+  }
+}
+
+// ─── Pestaña Combustible ──────────────────────────────────────────────────────
+// Cuando implementes BusFuelTypeScreen reemplaza el _Placeholder por:
+//   return Navigator(
+//     onGenerateRoute: (_) =>
+//         MaterialPageRoute(builder: (_) => const BusFuelTypeScreen()),
+//   );
+class _TabCombustible extends StatelessWidget {
+  const _TabCombustible();
+  @override
+  Widget build(BuildContext context) {
+    return _Placeholder(
+      icon: Icons.local_gas_station_outlined,
+      titulo: 'Tipo de Combustible',
+      subtitulo: 'Próximamente podrás gestionar\nlos tipos de combustible.',
+    );
+  }
+}
+
+// ─── Placeholder ──────────────────────────────────────────────────────────────
 class _Placeholder extends StatelessWidget {
   final IconData icon;
   final String titulo;
   final String subtitulo;
-
   const _Placeholder({
     required this.icon,
     required this.titulo,
@@ -146,7 +158,6 @@ class _Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -181,10 +192,10 @@ class _Placeholder extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
+                height: 1.5,
                 color: isDark
                     ? const Color(0xFF666666)
                     : const Color(0xFF999999),
-                height: 1.5,
               ),
             ),
             const SizedBox(height: 24),

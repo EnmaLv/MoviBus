@@ -1,82 +1,150 @@
 import 'package:flutter/material.dart';
-
-class IniciarRutaButton extends StatefulWidget {
-  final VoidCallback onTap;
-  const IniciarRutaButton({super.key, required this.onTap});
+class IniciarRutaPanel extends StatelessWidget {
+  final VoidCallback onDemo;
+  final VoidCallback onReal;
+  const IniciarRutaPanel({super.key, required this.onDemo, required this.onReal});
 
   @override
-  State<IniciarRutaButton> createState() => _IniciarRutaButtonState();
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RutaBtn(
+          label: 'INICIAR RUTA',
+          icon: Icons.navigation_rounded,
+          color: const Color(0xFFB71C1C),
+          onTap: onReal,
+        ),
+        const SizedBox(height: 8),
+        _RutaBtn(
+          label: 'MODO DEMO',
+          icon: Icons.play_circle_outline_rounded,
+          color: const Color(0xFF424242),
+          onTap: onDemo,
+        ),
+      ],
+    );
+  }
 }
 
-class _IniciarRutaButtonState extends State<IniciarRutaButton>
-    with SingleTickerProviderStateMixin {
-  static const _red = Color(0xFFB71C1C);
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
+
+class _RutaBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _RutaBtn({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    _scale = Tween<double>(
-      begin: 1,
-      end: 0.96,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
+}
+
+class CancelarRutaButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const CancelarRutaButton({super.key, required this.onTap});
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
+  State<CancelarRutaButton> createState() => _CancelarRutaButtonState();
+}
+
+class _CancelarRutaButtonState extends State<CancelarRutaButton> {
+  Future<void> _confirmar() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Cancelar ruta?'),
+        content: const Text(
+          'Úsalo solo en caso de emergencia o accidente.\n'
+          'La ruta quedará marcada como cancelada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Continuar ruta'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Cancelar ruta'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirm == true) widget.onTap();
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) {
-        _ctrl.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _ctrl.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          height: 52,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_red, Color(0xFFD32F2F)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
+      onTap: _confirmar,
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: const Color(0xFFB71C1C),
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
             ),
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: [
-              BoxShadow(
-                color: _red.withValues(alpha: 0.45),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+          ],
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cancel_outlined, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Text(
+              'CANCELAR RUTA',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
               ),
-            ],
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.navigation_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text(
-                'INICIAR RUTA',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
