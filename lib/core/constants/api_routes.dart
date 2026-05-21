@@ -1,1 +1,1 @@
-const String kBaseUrl = 'http://192.168.1.38:8000/api';
+const String kBaseUrl = 'https://sistemauniversitario-oc5a.onrender.com/api';
