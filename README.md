@@ -34,7 +34,7 @@ Para levantar el proyecto móvil en tu entorno de desarrollo, asegúrate de tene
 
 ```bash
 # 1. Clonar el repositorio móvil
-git clone [https://github.com/tu-usuario/movibus.git](https://github.com/tu-usuario/movibus.git)
+git clone https://github.com/EnmaLv/MoviBus.git
 
 # 2. Navegar al directorio del proyecto
 cd movibus
