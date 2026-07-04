@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'modules/auth/login.dart';
+import 'modules/splash/splash_screen.dart';
 import 'widgets/app_bar.dart';
 
 void main() async {
@@ -56,7 +56,7 @@ class _BusAppState extends State<BusApp> {
         scaffoldBackgroundColor: const Color(0xFF121212),
         useMaterial3: true,
       ),
-      home: LoginScreen(themeProvider: widget.themeProvider),
+      home: MoviBusSplashScreen(themeProvider: widget.themeProvider),
     );
   }
 }

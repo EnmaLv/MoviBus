@@ -105,6 +105,28 @@ class ApiService {
     await prefs.remove('modulos');
   }
 
+  // NUEVO MÉTODO: Verifica si hay sesión local y reconstruye los datos
+  static Future<Map<String, dynamic>?> getSavedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final usuarioStr = prefs.getString('usuario');
+      final rolesStr = prefs.getString('roles');
+
+      // Si tenemos el token y los datos esenciales del usuario, hay sesión activa
+      if (token != null && usuarioStr != null && rolesStr != null) {
+        return {
+          'success': true,
+          'usuario': jsonDecode(usuarioStr) as Map<String, dynamic>,
+          'roles': jsonDecode(rolesStr) as List<dynamic>,
+        };
+      }
+    } catch (_) {
+      return null; // Si algo falla o se corrompe el JSON, retorna null para forzar Login
+    }
+    return null; // No hay sesión iniciada
+  }
+
   // ── GET ───────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> get(String endpoint) async {

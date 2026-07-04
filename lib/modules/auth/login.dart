@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
-import '../../widgets/app_bar.dart'; // donde está AppThemeProvider
+import '../../widgets/app_bar.dart';
 import '../../widgets/input_field.dart';
 import '../Map/map_screen.dart';
 
