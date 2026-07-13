@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/app_bar.dart';
 import 'bus_brand_screen.dart';
 import 'bus_model_screen.dart';
-// import 'bus_fuel_type_screen.dart'; // descomenta cuando lo implementes
+import 'bus_fuel_type_screen.dart';
 
 const _catalogoItems = [
   NavItem(
@@ -136,10 +136,9 @@ class _TabCombustible extends StatelessWidget {
   const _TabCombustible();
   @override
   Widget build(BuildContext context) {
-    return _Placeholder(
-      icon: Icons.local_gas_station_outlined,
-      titulo: 'Tipo de Combustible',
-      subtitulo: 'Próximamente podrás gestionar\nlos tipos de combustible.',
+    return Navigator(
+      onGenerateRoute: (_) =>
+          MaterialPageRoute(builder: (_) => const BusFuelTypeScreen()),
     );
   }
 }

@@ -143,7 +143,6 @@ class _MoviBusSplashScreenState extends State<MoviBusSplashScreen>
     if (!mounted) return;
     _subtitleCtrl.forward();
 
-    // ── Optimización de Sesión en segundo plano ────────────────────────
     Map<String, dynamic>? activeSession;
     try {
       activeSession = await ApiService.getSavedSession();
@@ -363,8 +362,6 @@ class _MoviBusSplashScreenState extends State<MoviBusSplashScreen>
     );
   }
 }
-
-// ─── Widgets auxiliares mantenidos exactamente igual ─────────────────────────
 
 class _BusIcon extends StatelessWidget {
   @override

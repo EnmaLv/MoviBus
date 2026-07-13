@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_routes.dart';
 
 class ApiService {
-  // ── Helpers internos ──────────────────────────────────────────────────────
 
   static Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -122,9 +121,9 @@ class ApiService {
         };
       }
     } catch (_) {
-      return null; // Si algo falla o se corrompe el JSON, retorna null para forzar Login
+      return null;
     }
-    return null; // No hay sesión iniciada
+    return null;
   }
 
   // ── GET ───────────────────────────────────────────────────────────────────
