@@ -3,6 +3,7 @@ import '../../widgets/app_bar.dart';
 import 'bus_brand_screen.dart';
 import 'bus_model_screen.dart';
 import 'bus_fuel_type_screen.dart';
+import 'bus_vehicle_screen.dart';
 
 const _catalogoItems = [
   NavItem(
@@ -19,6 +20,11 @@ const _catalogoItems = [
     label: 'Combustible',
     icon: Icons.local_gas_station_outlined,
     activeIcon: Icons.local_gas_station,
+  ),
+  NavItem(
+    label: 'Vehiculos',
+    icon: Icons.directions_bus_outlined,
+    activeIcon: Icons.directions_bus,
   ),
 ];
 
@@ -38,11 +44,13 @@ class _BusCatalogoScreenState extends State<BusCatalogoScreen> {
     'Marcas de Vehículo',
     'Modelos',
     'Tipo de Combustible',
+    'Vehiculos',
   ];
   static const _subtitles = [
     'Catálogo · Marcas',
     'Catálogo · Modelos',
     'Catálogo · Combustible',
+    'Catálogo · Vehiculos',
   ];
 
   @override
@@ -85,11 +93,10 @@ class _BusCatalogoScreenState extends State<BusCatalogoScreen> {
         index: _currentIndex,
         children: const [
           // ── Cada pestaña es un StatefulWidget con su propio Navigator ──────
-          // Esto evita el crash: nunca se pone Navigator directamente
-          // en el IndexedStack, siempre va envuelto en su widget propio.
           _TabMarcas(),
           _TabModelos(),
           _TabCombustible(),
+          _TabVehiculos(),
         ],
       ),
       bottomNavigationBar: AppBottomNav(
@@ -127,11 +134,6 @@ class _TabModelos extends StatelessWidget {
 }
 
 // ─── Pestaña Combustible ──────────────────────────────────────────────────────
-// Cuando implementes BusFuelTypeScreen reemplaza el _Placeholder por:
-//   return Navigator(
-//     onGenerateRoute: (_) =>
-//         MaterialPageRoute(builder: (_) => const BusFuelTypeScreen()),
-//   );
 class _TabCombustible extends StatelessWidget {
   const _TabCombustible();
   @override
@@ -139,6 +141,17 @@ class _TabCombustible extends StatelessWidget {
     return Navigator(
       onGenerateRoute: (_) =>
           MaterialPageRoute(builder: (_) => const BusFuelTypeScreen()),
+    );
+  }
+}
+
+class _TabVehiculos extends StatelessWidget {
+  const _TabVehiculos();
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      onGenerateRoute: (_) =>
+          MaterialPageRoute(builder: (_) => const BusVehicleScreen()),
     );
   }
 }

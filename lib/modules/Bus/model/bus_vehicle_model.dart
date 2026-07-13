@@ -1,0 +1,115 @@
+class BusVehiculo {
+  final int id;
+  final String placa;
+  final int modeloId;
+  final String modeloNombre;
+  final String marcaNombre;
+  final int anio;
+  final String color;
+  final int cantidadPasajeros;
+  final int tipoCombustibleId;
+  final String combustibleNombre;
+  final int cantidadBocas;
+  final double capacidadTanqueLitros;
+  final double consumoLitrosKm;
+  final double kmActual;
+  final double kmProximoMantenimiento;
+  final int? conductorId;
+  final int sucursalId;
+  final String sucursalNombre;
+  final bool activo;
+  final String estado;
+
+  const BusVehiculo({
+    required this.id,
+    required this.placa,
+    required this.modeloId,
+    required this.modeloNombre,
+    required this.marcaNombre,
+    required this.anio,
+    required this.color,
+    required this.cantidadPasajeros,
+    required this.tipoCombustibleId,
+    required this.combustibleNombre,
+    required this.cantidadBocas,
+    required this.capacidadTanqueLitros,
+    required this.consumoLitrosKm,
+    required this.kmActual,
+    required this.kmProximoMantenimiento,
+    this.conductorId,
+    required this.sucursalId,
+    required this.sucursalNombre,
+    required this.activo,
+    required this.estado,
+  });
+
+  factory BusVehiculo.fromJson(Map<String, dynamic> j) {
+    return BusVehiculo(
+      id: j['id'] as int,
+      placa: j['placa'] as String? ?? '',
+      modeloId: j['modelo_id'] as int,
+      modeloNombre: j['modelo']?['nombre'] as String? ?? 'Desconocido',
+      marcaNombre: j['modelo']?['bus_marca']?['nombre'] as String? ?? 
+                   j['modelo']?['marca']?['nombre'] as String? ?? '',
+      anio: j['anio'] as int,
+      color: j['color'] as String? ?? '',
+      cantidadPasajeros: j['cantidad_pasajeros'] as int,
+      tipoCombustibleId: j['tipo_combustible_id'] as int,
+      combustibleNombre: j['tipo_combustible']?['nombre'] as String? ?? 'Desconocido',
+      cantidadBocas: j['cantidad_bocas'] as int,
+      capacidadTanqueLitros: (j['capacidad_tanque_litros'] as num).toDouble(),
+      consumoLitrosKm: (j['consumo_litros_km'] as num).toDouble(),
+      kmActual: (j['km_actual'] as num).toDouble(),
+      kmProximoMantenimiento: (j['km_proximo_mantenimiento'] as num).toDouble(),
+      conductorId: j['conductor_id'] as int?,
+      sucursalId: j['sucursal_id'] as int,
+      sucursalNombre: j['sucursal']?['nombre'] as String? ?? 'Matriz',
+      activo: j['activo'] == true || j['activo'] == 1,
+      estado: j['estado'] as String? ?? 'disponible',
+    );
+  }
+
+  BusVehiculo copyWith({
+    String? placa,
+    int? modeloId,
+    String? modeloNombre,
+    String? marcaNombre,
+    int? anio,
+    String? color,
+    int? cantidadPasajeros,
+    int? tipoCombustibleId,
+    String? combustibleNombre,
+    int? cantidadBocas,
+    double? capacidadTanqueLitros,
+    double? consumoLitrosKm,
+    double? kmActual,
+    double? kmProximoMantenimiento,
+    int? sucursalId,
+    String? sucursalNombre,
+    bool? activo,
+    String? estado,
+  }) {
+    return BusVehiculo(
+      id: id,
+      placa: placa ?? this.placa,
+      modeloId: modeloId ?? this.modeloId,
+      modeloNombre: modeloNombre ?? this.modeloNombre,
+      marcaNombre: marcaNombre ?? this.marcaNombre,
+      anio: anio ?? this.anio,
+      color: color ?? this.color,
+      cantidadPasajeros: cantidadPasajeros ?? this.cantidadPasajeros,
+      tipoCombustibleId: tipoCombustibleId ?? this.tipoCombustibleId,
+      combustibleNombre: combustibleNombre ?? this.combustibleNombre,
+      cantidadBocas: cantidadBocas ?? this.cantidadBocas,
+      capacidadTanqueLitros: capacidadTanqueLitros ?? this.capacidadTanqueLitros,
+      consumoLitrosKm: consumoLitrosKm ?? this.consumoLitrosKm,
+      kmActual: kmActual ?? this.kmActual,
+      kmProximoMantenimiento: kmProximoMantenimiento ?? this.kmProximoMantenimiento,
+      conductorId: conductorId,
+      sucursalId: sucursalId ?? this.sucursalId,
+      sucursalNombre: sucursalNombre ?? this.sucursalNombre,
+      activo: activo ?? this.activo,
+      estado: estado ?? this.estado,
+    );
+  }
+}

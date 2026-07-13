@@ -506,11 +506,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       activeIcon: Icons.people,
     ),
     NavItem(
-      label: 'Combustible',
-      icon: Icons.local_gas_station_outlined,
-      activeIcon: Icons.local_gas_station,
-    ),
-    NavItem(
       label: 'Mant.',
       icon: Icons.build_outlined,
       activeIcon: Icons.build,
