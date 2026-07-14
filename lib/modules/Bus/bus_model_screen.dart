@@ -7,6 +7,7 @@ import 'widgets/bus_model_stats_bar.dart';
 import 'widgets/bus_model_card.dart';
 import 'widgets/bus_model_formsheet.dart';
 import 'widgets/bus_model_filter_chip.dart';
+import 'package:movibus/services/catalog_signal.dart';
 
 class BusModeloScreen extends StatefulWidget {
   const BusModeloScreen({super.key});
@@ -31,15 +32,24 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
     super.initState();
     _cargar();
     _searchCtrl.addListener(_filtrar);
+    CatalogSignal.notifier.addListener(_onCatalogChanged);
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    CatalogSignal.notifier.removeListener(_onCatalogChanged);
     super.dispose();
   }
 
+  void _onCatalogChanged() {
+    if (mounted) {
+      _cargar(); // Vuelve a traer los modelos y las marcas actualizadas de la API
+    }
+  }
+
   Future<void> _cargar() async {
+    if (!mounted) return;
     setState(() {
       _cargando = true;
       _error = null;
@@ -49,6 +59,10 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
         BusModeloService.getAll(),
         BusModeloService.getMarcas(),
       ]);
+
+      // Guardián post-API
+      if (!mounted) return;
+
       setState(() {
         _modelos = results[0] as List<BusModelo>;
         final marcas = results[1] as List<BusMarca>;
@@ -58,8 +72,10 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
         _filtrados = _modelos.where((m) => m.estado).toList();
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _cargando = false);
     }
   }
@@ -95,7 +111,8 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => ModeloFormSheet(modelo: modelo, marcas: _marcas),
     );
-    if (result == null) return;
+    // Guardián post-modal
+    if (result == null || !mounted) return;
 
     final marcaId = result['marcaId'] as int;
     final nombre = result['nombre'] as String;
@@ -103,10 +120,12 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
     try {
       if (modelo == null) {
         final nuevo = await BusModeloService.create(marcaId, nombre);
+        if (!mounted) return; // Guardián post-API
         setState(() {
           _modelos.add(nuevo);
           _filtrar();
         });
+        CatalogSignal.notifyChange();
         _snack('Modelo "${nuevo.nombre}" creado.', success: true);
       } else {
         final actualizado = await BusModeloService.update(
@@ -114,11 +133,13 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
           marcaId,
           nombre,
         );
+        if (!mounted) return; // Guardián post-API
         setState(() {
           final i = _modelos.indexWhere((m) => m.id == modelo.id);
           if (i != -1) _modelos[i] = actualizado;
           _filtrar();
         });
+        CatalogSignal.notifyChange();
         _snack('Modelo actualizado.', success: true);
       }
     } catch (e) {
@@ -129,11 +150,13 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
   Future<void> _toggle(BusModelo modelo) async {
     try {
       await BusModeloService.toggle(modelo.id);
+      if (!mounted) return; // Guardián post-API
       setState(() {
         final i = _modelos.indexWhere((m) => m.id == modelo.id);
         if (i != -1) _modelos[i] = modelo.copyWith(estado: !modelo.estado);
         _filtrar();
       });
+      CatalogSignal.notifyChange();
       HapticFeedback.lightImpact();
     } catch (e) {
       _snack(e.toString());
@@ -159,15 +182,16 @@ class _BusModeloScreenState extends State<BusModeloScreen> {
         ],
       ),
     );
-    if (confirm != true) return;
-    if (!mounted) return;
+    if (confirm != true || !mounted) return; // Guardián post-dialog
 
     try {
       await BusModeloService.delete(modelo.id);
+      if (!mounted) return; // Guardián post-API
       setState(() {
         _modelos.removeWhere((m) => m.id == modelo.id);
         _filtrar();
       });
+      CatalogSignal.notifyChange();
       _snack('Modelo eliminado.', success: true);
     } catch (e) {
       _snack(e.toString());

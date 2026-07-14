@@ -9,7 +9,8 @@ class ModeloCard extends StatelessWidget {
   final VoidCallback onDelete;
   static const _red = Color(0xFFB71C1C);
 
-  const ModeloCard({super.key, 
+  const ModeloCard({
+    super.key,
     required this.modelo,
     required this.isDark,
     required this.onEdit,
@@ -115,14 +116,6 @@ class ModeloCard extends StatelessWidget {
               icon: const Icon(Icons.edit_outlined, size: 20),
               onPressed: onEdit,
               color: const Color(0xFF555555),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, size: 20),
-              onPressed: onDelete,
-              color: _red,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),

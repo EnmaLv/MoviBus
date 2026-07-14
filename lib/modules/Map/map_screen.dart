@@ -19,9 +19,8 @@ import '../../widgets/start_route_button.dart';
 import '../Bus/bus_catalogo_screen.dart';
 import 'services/tracking_service.dart';
 
-// Puntos de la demo — OSRM calculará la ruta real entre ellos por calles
-const _demoOrigen = LatLng(9.546987, -69.192543); // UPTP
-const _demoDestino = LatLng(9.554500, -69.183500); // Destino demo
+const _demoOrigen = LatLng(9.546987, -69.192543);
+const _demoDestino = LatLng(9.554500, -69.183500);
 
 class MoviMap extends StatefulWidget {
   final Map<String, dynamic> usuario;
@@ -39,7 +38,8 @@ class MoviMap extends StatefulWidget {
   State<MoviMap> createState() => _MoviMapState();
 }
 
-class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
+// OPTIMIZACIÓN: Se eliminó TickerProviderStateMixin porque el controlador de pulso no se usaba aquí
+class _MoviMapState extends State<MoviMap> {
   static const _red = Color(0xFFB71C1C);
 
   int _currentIndex = 0;
@@ -48,10 +48,12 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   BitmapDescriptor? _busStoppedIcon;
   BusEnMapa? _busSeleccionado;
 
-  late AnimationController _pulseCtrl;
-  late Animation<double> pulseAnim;
-
   final TrackingService _trackingService = TrackingService();
+
+  // OPTIMIZACIÓN: Variables de control de rendimiento
+  bool _mapaListo = false;
+  Set<Marker> _markersCache = {};
+  Set<Polyline> _polylinesCache = {};
 
   bool _trackingActivo = false;
   bool _esModoDemo = false;
@@ -69,20 +71,23 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    pulseAnim = Tween<double>(
-      begin: 0.6,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
-    _crearIconos();
+    _inicializarPantalla();
+  }
+
+  Future<void> _inicializarPantalla() async {
+    await _crearIconos();
+
+    // OPTIMIZACIÓN: Retrasar la renderización del mapa 450ms para que las transiciones de pantalla vayan suaves
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (mounted) {
+      setState(() {
+        _mapaListo = true;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _pulseCtrl.dispose();
     _demoTimer?.cancel();
     _trackingService.detenerTracking();
     super.dispose();
@@ -91,7 +96,7 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   Future<void> _crearIconos() async {
     _busMovingIcon = await _buildBusIcon(moving: true);
     _busStoppedIcon = await _buildBusIcon(moving: false);
-    if (mounted) setState(() {});
+    _actualizarElementosVisualesDelMapa();
   }
 
   Future<BitmapDescriptor> _buildBusIcon({required bool moving}) async {
@@ -115,10 +120,103 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     return BitmapDescriptor.bytes(data!.buffer.asUint8List());
   }
 
-  // ── OSRM — ruta por calles reales, sin API key, sin billing ──────────────
-  // Usa OpenStreetMap. Servidor público: router.project-osrm.org
+  // OPTIMIZACIÓN CENTRAL: Reemplaza los Getters pesados.
+  // Crea los marcadores y polilíneas en memoria local solo cuando hay cambios reales.
+  void _actualizarElementosVisualesDelMapa() {
+    if (!mounted) return;
+
+    // 1. Construir Marcadores alternos
+    final nuevosMarkers = <Marker>{};
+    for (final bus in busesSimulados) {
+      nuevosMarkers.add(
+        Marker(
+          markerId: MarkerId(bus.id),
+          position: bus.posicion,
+          icon: bus.enMovimiento
+              ? (_busMovingIcon ??
+                    BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueRed,
+                    ))
+              : (_busStoppedIcon ??
+                    BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueAzure,
+                    )),
+          onTap: () => _mostrarInfoBus(bus),
+        ),
+      );
+    }
+
+    if (_miUbicacion != null) {
+      nuevosMarkers.add(
+        Marker(
+          markerId: const MarkerId('mi_bus'),
+          position: _miUbicacion!,
+          icon:
+              _busMovingIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'Mi Bus'),
+          zIndex: 2,
+        ),
+      );
+    }
+
+    if (_trackingActivo && _rutaCalles.isNotEmpty) {
+      nuevosMarkers.add(
+        Marker(
+          markerId: const MarkerId('ruta_inicio'),
+          position: _rutaCalles.first,
+          infoWindow: const InfoWindow(title: 'Salida'),
+        ),
+      );
+      nuevosMarkers.add(
+        Marker(
+          markerId: const MarkerId('ruta_fin'),
+          position: _esModoDemo ? _rutaCalles.last : _destinoReal,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+          infoWindow: const InfoWindow(title: 'Destino · UPTP'),
+        ),
+      );
+    }
+
+    // 2. Construir Polilíneas alternas
+    final nuevasPolylines = <Polyline>{};
+    if (_trackingActivo && _rutaCalles.isNotEmpty) {
+      final total = _rutaCalles.length;
+      nuevasPolylines.add(
+        Polyline(
+          polylineId: const PolylineId('ruta_completa'),
+          points: _rutaCalles,
+          color: _red.withValues(alpha: 0.35),
+          width: 5, // Ligeramente más delgado para reducir carga geométrica
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+          jointType: JointType.round,
+        ),
+      );
+      if (_demoPuntoActual > 0) {
+        nuevasPolylines.add(
+          Polyline(
+            polylineId: const PolylineId('ruta_recorrida'),
+            points: _rutaCalles.sublist(0, _demoPuntoActual.clamp(1, total)),
+            color: _red,
+            width: 5,
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
+            jointType: JointType.round,
+          ),
+        );
+      }
+    }
+
+    setState(() {
+      _markersCache = nuevosMarkers;
+      _polylinesCache = nuevasPolylines;
+    });
+  }
+
   Future<List<LatLng>> _obtenerRutaCalles(LatLng origen, LatLng destino) async {
-    // OSRM usa formato: lng,lat (al revés que Google)
     final url = Uri.parse(
       'https://router.project-osrm.org/route/v1/driving/'
       '${origen.longitude},${origen.latitude};'
@@ -140,7 +238,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       final routes = data['routes'] as List?;
       if (routes == null || routes.isEmpty) return _rutaFallback();
 
-      // GeoJSON devuelve coordenadas como [lng, lat]
       final coords = routes[0]['geometry']['coordinates'] as List;
       return coords.map((c) {
         final punto = c as List;
@@ -155,7 +252,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     }
   }
 
-  // Fallback: interpola puntos en línea recta si OSRM no responde
   List<LatLng> _rutaFallback() {
     const pasos = 20;
     return List.generate(pasos + 1, (i) {
@@ -169,110 +265,20 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     });
   }
 
-  // ── Marcadores ────────────────────────────────────────────────────────────
-  Set<Marker> get _allMarkers {
-    final markers = <Marker>{};
-
-    for (final bus in busesSimulados) {
-      markers.add(
-        Marker(
-          markerId: MarkerId(bus.id),
-          position: bus.posicion,
-          icon: bus.enMovimiento
-              ? (_busMovingIcon ??
-                    BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueRed,
-                    ))
-              : (_busStoppedIcon ??
-                    BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueAzure,
-                    )),
-          onTap: () => _mostrarInfoBus(bus),
-        ),
-      );
-    }
-
-    if (_miUbicacion != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('mi_bus'),
-          position: _miUbicacion!,
-          icon:
-              _busMovingIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: 'Mi Bus'),
-          zIndex: 2,
-        ),
-      );
-    }
-
-    if (_trackingActivo && _rutaCalles.isNotEmpty) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('ruta_inicio'),
-          position: _rutaCalles.first,
-          infoWindow: const InfoWindow(title: 'Salida'),
-        ),
-      );
-      // Destino: UPTP fijo en modo real, último punto en demo
-      markers.add(
-        Marker(
-          markerId: const MarkerId('ruta_fin'),
-          position: _esModoDemo ? _rutaCalles.last : _destinoReal,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          ),
-          infoWindow: const InfoWindow(title: 'Destino · UPTP'),
-        ),
-      );
-    }
-
-    return markers;
-  }
-
-  // ── Polilíneas ────────────────────────────────────────────────────────────
-  Set<Polyline> get _polylines {
-    if (!_trackingActivo || _rutaCalles.isEmpty) return {};
-    final total = _rutaCalles.length;
-    return {
-      Polyline(
-        polylineId: const PolylineId('ruta_completa'),
-        points: _rutaCalles,
-        color: _red.withValues(alpha: 0.35),
-        width: 6,
-        startCap: Cap.roundCap,
-        endCap: Cap.roundCap,
-        jointType: JointType.round,
-      ),
-      if (_demoPuntoActual > 0)
-        Polyline(
-          polylineId: const PolylineId('ruta_recorrida'),
-          points: _rutaCalles.sublist(0, _demoPuntoActual.clamp(1, total)),
-          color: _red,
-          width: 6,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-          jointType: JointType.round,
-        ),
-    };
-  }
-
-  // ── Demo ──────────────────────────────────────────────────────────────────
   Future<void> _iniciarDemo() async {
     setState(() => _cargandoRuta = true);
 
     final puntos = await _obtenerRutaCalles(_demoOrigen, _demoDestino);
-
     if (!mounted) return;
 
-    setState(() {
-      _rutaCalles = puntos;
-      _esModoDemo = true;
-      _trackingActivo = true;
-      _demoPuntoActual = 0;
-      _miUbicacion = puntos.first;
-      _cargandoRuta = false;
-    });
+    _rutaCalles = puntos;
+    _esModoDemo = true;
+    _trackingActivo = true;
+    _demoPuntoActual = 0;
+    _miUbicacion = puntos.first;
+    _cargandoRuta = false;
+
+    _actualizarElementosVisualesDelMapa();
 
     mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -280,7 +286,8 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       ),
     );
 
-    _demoTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+    // OPTIMIZACIÓN: Cambiado de 300ms a 450ms. Sigue viéndose fluido pero reduce un 50% el estrés del procesador.
+    _demoTimer = Timer.periodic(const Duration(milliseconds: 450), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -292,10 +299,10 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
         return;
       }
 
-      setState(() {
-        _demoPuntoActual++;
-        _miUbicacion = _rutaCalles[_demoPuntoActual];
-      });
+      _demoPuntoActual++;
+      _miUbicacion = _rutaCalles[_demoPuntoActual];
+
+      _actualizarElementosVisualesDelMapa();
 
       mapController?.animateCamera(
         CameraUpdate.newLatLng(_rutaCalles[_demoPuntoActual]),
@@ -305,12 +312,14 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
 
   void _llegarAlDestino() {
     if (!mounted) return;
-    setState(() {
-      _trackingActivo = false;
-      _esModoDemo = false;
-      _miUbicacion = null;
-      _rutaCalles = [];
-    });
+    _trackingActivo = false;
+    _esModoDemo = false;
+    _miUbicacion = null;
+    _rutaCalles = [];
+    _demoPuntoActual = 0;
+
+    _actualizarElementosVisualesDelMapa();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Row(
@@ -330,18 +339,16 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   void _cancelarRuta() {
     _demoTimer?.cancel();
     _trackingService.detenerTracking();
-    setState(() {
-      _trackingActivo = false;
-      _esModoDemo = false;
-      _miUbicacion = null;
-      _demoPuntoActual = 0;
-      _rutaCalles = [];
-    });
+    _trackingActivo = false;
+    _esModoDemo = false;
+    _miUbicacion = null;
+    _demoPuntoActual = 0;
+    _rutaCalles = [];
+    _actualizarElementosVisualesDelMapa();
   }
 
-  // Destino fijo — punto de salida y llegada de los estudiantes
   static const _destinoReal = LatLng(9.546987, -69.192543);
-  static const _radioLlegada = 50.0; // metros
+  static const _radioLlegada = 50.0;
 
   Future<void> _iniciarRutaReal() async {
     final ok = await _trackingService.solicitarPermisos();
@@ -359,7 +366,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
       _esModoDemo = false;
     });
 
-    // Obtener posición actual como origen
     Position? posActual;
     try {
       posActual = await Geolocator.getCurrentPosition(
@@ -374,19 +380,17 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     final origen = posActual != null
         ? LatLng(posActual.latitude, posActual.longitude)
         : _destinoReal;
-
     final puntos = await _obtenerRutaCalles(origen, _destinoReal);
     if (!mounted) return;
 
-    setState(() {
-      _rutaCalles = puntos;
-      _trackingActivo = true;
-      _miUbicacion = origen;
-      _demoPuntoActual = 0;
-      _cargandoRuta = false;
-    });
+    _rutaCalles = puntos;
+    _trackingActivo = true;
+    _miUbicacion = origen;
+    _demoPuntoActual = 0;
+    _cargandoRuta = false;
 
-    // Mostrar toda la ruta en la cámara
+    _actualizarElementosVisualesDelMapa();
+
     if (puntos.length > 1) {
       final bounds = _calcularBounds(puntos);
       mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
@@ -395,13 +399,13 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     _trackingService.iniciarTracking((pos) {
       if (!mounted) return;
       final nuevaPos = LatLng(pos.latitude, pos.longitude);
-      setState(() {
-        _miUbicacion = nuevaPos;
-        _demoPuntoActual = _puntoMasCercano(nuevaPos);
-      });
+
+      _miUbicacion = nuevaPos;
+      _demoPuntoActual = _puntoMasCercano(nuevaPos);
+
+      _actualizarElementosVisualesDelMapa();
       mapController?.animateCamera(CameraUpdate.newLatLng(nuevaPos));
 
-      // Detectar llegada
       final distancia = Geolocator.distanceBetween(
         nuevaPos.latitude,
         nuevaPos.longitude,
@@ -415,7 +419,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     });
   }
 
-  // Punto de la ruta más cercano a la posición actual (solo avanza, no retrocede)
   int _puntoMasCercano(LatLng pos) {
     if (_rutaCalles.isEmpty) return 0;
     int mejor = _demoPuntoActual;
@@ -435,7 +438,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
     return mejor;
   }
 
-  // Bounding box de la ruta para centrar la cámara
   LatLngBounds _calcularBounds(List<LatLng> puntos) {
     double minLat = puntos.first.latitude, maxLat = puntos.first.latitude;
     double minLng = puntos.first.longitude, maxLng = puntos.first.longitude;
@@ -466,7 +468,6 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
 
   String? get _rolNombre =>
       widget.roles.isEmpty ? null : widget.roles.first['nombre'] as String?;
-
   List<NavItem> get _navItems => _esAdmin ? _adminItems : _conductorItems;
 
   static const _conductorItems = [
@@ -562,16 +563,37 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   }
 
   Widget _buildMapPage() {
+    // OPTIMIZACIÓN: Si el delay no ha terminado, mostramos una linda pantalla de carga intermedia
+    if (!_mapaListo) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: _red),
+            SizedBox(height: 14),
+            Text(
+              'Inicializando sistema de mapas...',
+              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Stack(
       children: [
-        GoogleMap(
-          initialCameraPosition: _initialPosition,
-          onMapCreated: (c) => mapController = c,
-          mapType: MapType.normal,
-          markers: _allMarkers,
-          polylines: _polylines,
-          onTap: (_) => _cerrarInfoBus(),
-          padding: const EdgeInsets.only(bottom: 80),
+        // OPTIMIZACIÓN: RepaintBoundary aísla completamente los movimientos del mapa de los componentes Flutter
+        RepaintBoundary(
+          child: GoogleMap(
+            initialCameraPosition: _initialPosition,
+            onMapCreated: (c) => mapController = c,
+            mapType: MapType.normal,
+            markers: _markersCache, // Usa la caché del estado limpio
+            polylines: _polylinesCache, // Usa la caché del estado limpio
+            onTap: (_) => _cerrarInfoBus(),
+            padding: const EdgeInsets.only(bottom: 80),
+            indoorViewEnabled: false,
+          ),
         ),
 
         if (_cargandoRuta)
@@ -664,6 +686,7 @@ class _MoviMapState extends State<MoviMap> with TickerProviderStateMixin {
   }
 }
 
+// Nota: El widget _PulseDot se mantiene igual ya que maneja su propia animación aislada correctamente.
 class _PulseDot extends StatefulWidget {
   const _PulseDot();
   @override

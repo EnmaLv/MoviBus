@@ -78,8 +78,9 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
       _estadoSel = v.estado;
     } else {
       _estadoSel = 'disponible';
-      if (widget.sucursales.isNotEmpty)
+      if (widget.sucursales.isNotEmpty) {
         _sucursalSelId = widget.sucursales.first['id'] as int;
+      }
     }
   }
 
@@ -147,7 +148,9 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottom),
       decoration: BoxDecoration(
         color: sheetBg,
@@ -243,7 +246,8 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<BusModelo>(
-                      value: _modeloSel,
+                      value:
+                          _modeloSel, // Corregido: value en vez de initialValue
                       hint: const Text('Seleccione Modelo'),
                       decoration: _deco(
                         'Modelo de Vehículo',
@@ -264,7 +268,8 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
                     // --- SECCIÓN 2: MECÁNICA Y RENDIMIENTO ---
                     _buildSectionTitle('Combustible y Rendimiento'),
                     DropdownButtonFormField<BusTipoCombustible>(
-                      value: _combustibleSel,
+                      value:
+                          _combustibleSel, // Corregido: value en vez de initialValue
                       hint: const Text('Tipo de Combustible'),
                       decoration: _deco(
                         'Combustible',
@@ -281,6 +286,7 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
                       onChanged: (c) => setState(() => _combustibleSel = c),
                     ),
                     const SizedBox(height: 12),
+
                     Row(
                       children: [
                         Expanded(
@@ -308,20 +314,18 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
                                 val!.isEmpty ? 'Requerido' : null,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _bocasCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _deco(
-                              'Bocas',
-                              Icons.ev_station_outlined,
-                            ),
-                            validator: (val) =>
-                                val!.isEmpty ? 'Requerido' : null,
-                          ),
-                        ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: _bocasCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: _deco(
+                        'Bocas de Llenado',
+                        Icons.ev_station_outlined,
+                      ),
+                      validator: (val) => val!.isEmpty ? 'Requerido' : null,
                     ),
 
                     const SizedBox(height: 20),
@@ -354,96 +358,95 @@ class _VehicleFormSheetState extends State<VehicleFormSheet> {
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // --- REDISEÑO: SELECTORES UNO DEBAJO DEL OTRO ---
+                    DropdownButtonFormField<int>(
+                      value:
+                          _sucursalSelId, // Corregido: value en vez de initialValue
+                      decoration: _deco(
+                        'Sucursal / Sede',
+                        Icons.business_outlined,
+                      ),
+                      items: widget.sucursales
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s['id'] as int,
+                              child: Text(s['nombre'] as String),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (id) => setState(() => _sucursalSelId = id),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value:
+                          _estadoSel, // Corregido: value en vez de initialValue
+                      decoration: _deco(
+                        'Estado Inicial',
+                        Icons.traffic_outlined,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'disponible',
+                          child: Text('Disponible'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'en_ruta',
+                          child: Text('En Ruta'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'mantenimiento',
+                          child: Text('Mantenimiento'),
+                        ),
+                      ],
+                      onChanged: (est) => setState(() => _estadoSel = est),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // --- BOTONES DE ACCIÓN ---
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _sucursalSelId,
-                            decoration: _deco(
-                              'Sucursal / Sede',
-                              Icons.business_outlined,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            items: widget.sucursales
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s['id'] as int,
-                                    child: Text(s['nombre'] as String),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (id) =>
-                                setState(() => _sucursalSelId = id),
+                            child: const Text('Cancelar'),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _estadoSel,
-                            decoration: _deco(
-                              'Estado Inicial',
-                              Icons.traffic_outlined,
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'disponible',
-                                child: Text('Disponible'),
+                            child: Text(
+                              _esEditar
+                                  ? 'Guardar cambios'
+                                  : 'Registrar vehículo',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
                               ),
-                              DropdownMenuItem(
-                                value: 'en_ruta',
-                                child: Text('En Ruta'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'mantenimiento',
-                                child: Text('Mantenimiento'),
-                              ),
-                            ],
-                            onChanged: (est) =>
-                                setState(() => _estadoSel = est),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Cancelar'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      _esEditar ? 'Guardar cambios' : 'Registrar vehículo',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
         ),

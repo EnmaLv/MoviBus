@@ -28,7 +28,7 @@ class BusModeloService {
 
   static Future<BusModelo> create(int marcaId, String nombre) async {
     final res = await ApiService.post(_base, {
-      'bus_marca_id': marcaId,
+      'marca_id': marcaId,
       'nombre': nombre,
     });
     if (res['success'] == true) return BusModelo.fromJson(res['data']);
@@ -37,7 +37,7 @@ class BusModeloService {
 
   static Future<BusModelo> update(int id, int marcaId, String nombre) async {
     final res = await ApiService.put('$_base/$id', {
-      'bus_marca_id': marcaId,
+      'marca_id': marcaId,
       'nombre': nombre,
     });
     if (res['success'] == true) return BusModelo.fromJson(res['data']);

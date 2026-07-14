@@ -42,7 +42,11 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
   }
 
   Future<void> _cargar() async {
-    setState(() { _cargando = true; _error = null; });
+    if (!mounted) return;
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
     try {
       // Disparamos peticiones asíncronas concurrentes para optimizar la red
       final results = await Future.wait([
@@ -52,6 +56,9 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
         BusVehiculoService.getSucursales(),
       ]);
 
+      // Guardián: Si el usuario cambió de pestaña mientras cargaba la API, detenemos el proceso.
+      if (!mounted) return;
+
       setState(() {
         _vehiculos = results[0] as List<BusVehiculo>;
         _modelos = results[1] as List<BusModelo>;
@@ -60,8 +67,10 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
         _filtrados = _vehiculos;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _cargando = false);
     }
   }
@@ -70,17 +79,19 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
     final q = _searchCtrl.text.toLowerCase();
     setState(() {
       _filtrados = _vehiculos.where((v) {
-        return v.placa.toLowerCase().contains(q) || 
-               v.modeloNombre.toLowerCase().contains(q) || 
-               v.marcaNombre.toLowerCase().contains(q) ||
-               v.color.toLowerCase().contains(q);
+        return v.placa.toLowerCase().contains(q) ||
+            v.modeloNombre.toLowerCase().contains(q) ||
+            v.marcaNombre.toLowerCase().contains(q) ||
+            v.color.toLowerCase().contains(q);
       }).toList();
     });
   }
 
   Future<void> _crearOEditar({BusVehiculo? vehiculo}) async {
     if (_modelos.isEmpty || _combustibles.isEmpty) {
-      _snack('Asegúrese de tener marcas, modelos y combustibles cargados primero.');
+      _snack(
+        'Asegúrese de tener marcas, modelos y combustibles cargados primero.',
+      );
       return;
     }
 
@@ -95,15 +106,23 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
         sucursales: _sucursales,
       ),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
 
     try {
       if (vehiculo == null) {
         final nuevo = await BusVehiculoService.create(result);
-        setState(() { _vehiculos.add(nuevo); _filtrar(); });
+        if (!mounted) return;
+        setState(() {
+          _vehiculos.add(nuevo);
+          _filtrar();
+        });
         _snack('Vehículo [${nuevo.placa}] registrado.', success: true);
       } else {
-        final actualizado = await BusVehiculoService.update(vehiculo.id, result);
+        final actualizado = await BusVehiculoService.update(
+          vehiculo.id,
+          result,
+        );
+        if (!mounted) return;
         setState(() {
           final i = _vehiculos.indexWhere((v) => v.id == vehiculo.id);
           if (i != -1) _vehiculos[i] = actualizado;
@@ -119,9 +138,15 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
   Future<void> _toggle(BusVehiculo vehiculo) async {
     try {
       await BusVehiculoService.toggle(vehiculo.id);
+      if (!mounted) return;
       setState(() {
         final i = _vehiculos.indexWhere((v) => v.id == vehiculo.id);
-        if (i != -1) _vehiculos[i] = vehiculo.copyWith(activo: !vehiculo.activo, estado: !vehiculo.activo ? 'disponible' : 'inactivo');
+        if (i != -1) {
+          _vehiculos[i] = vehiculo.copyWith(
+            activo: !vehiculo.activo,
+            estado: !vehiculo.activo ? 'disponible' : 'inactivo',
+          );
+        }
         _filtrar();
       });
       HapticFeedback.lightImpact();
@@ -135,18 +160,31 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('¿Eliminar Vehículo?'),
-        content: Text('Se removerá la placa "${vehiculo.placa}" del sistema de manera irreversible.'),
+        content: Text(
+          'Se removerá la placa "${vehiculo.placa}" del sistema de manera irreversible.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: _red), child: const Text('Eliminar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: _red),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     try {
       await BusVehiculoService.delete(vehiculo.id);
-      setState(() { _vehiculos.removeWhere((v) => v.id == vehiculo.id); _filtrar(); });
+      if (!mounted) return;
+      setState(() {
+        _vehiculos.removeWhere((v) => v.id == vehiculo.id);
+        _filtrar();
+      });
       _snack('Vehículo eliminado permanentemente.', success: true);
     } catch (e) {
       _snack(e.toString());
@@ -178,7 +216,10 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
         backgroundColor: _red,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_road_rounded),
-        label: const Text('Nuevo Vehículo', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: const Text(
+          'Nuevo Vehículo',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
       body: Column(
         children: [
@@ -194,7 +235,10 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
                 prefixIcon: const Icon(Icons.search, color: Colors.white70),
                 filled: true,
                 fillColor: Colors.white.withValues(alpha: 0.15),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -218,7 +262,11 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton.icon(onPressed: _cargar, icon: const Icon(Icons.refresh), label: const Text('Reintentar')),
+            TextButton.icon(
+              onPressed: _cargar,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
           ],
         ),
       );
@@ -229,9 +277,18 @@ class _BusVehicleScreenState extends State<BusVehicleScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.directions_bus_outlined, size: 48, color: Colors.grey[400]),
+            Icon(
+              Icons.directions_bus_outlined,
+              size: 48,
+              color: Colors.grey[400],
+            ),
             const SizedBox(height: 12),
-            Text(_searchCtrl.text.isEmpty ? 'No hay vehículos registrados.' : 'Sin resultados para la búsqueda.', style: TextStyle(color: Colors.grey[500])),
+            Text(
+              _searchCtrl.text.isEmpty
+                  ? 'No hay vehículos registrados.'
+                  : 'Sin resultados para la búsqueda.',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
           ],
         ),
       );

@@ -12,6 +12,7 @@ dependencies:
   shared_preferences: ^2.5.4
   flutter:
     sdk: flutter
+  flutter_native_splash: ^2.4.4
   cupertino_icons: ^1.0.8
   google_maps_flutter: ^2.16.0
   geolocator: ^14.0.2
@@ -30,3 +31,12 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+
+flutter_native_splash:
+  color: "#B71C1C"
+  image: assets/logo.png
+  fullscreen: true
+
+  android_12:
+    color: "#B71C1C"
+    image: assets/logo.png

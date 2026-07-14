@@ -5,6 +5,7 @@ import 'model/bus_brand_model.dart';
 import 'widgets/bus_brand_stats_bar.dart';
 import 'widgets/bus_brand_card.dart';
 import 'widgets/bus_brand_formsheet.dart';
+import 'package:movibus/services/catalog_signal.dart';
 
 class BusMarcaScreen extends StatefulWidget {
   const BusMarcaScreen({super.key});
@@ -26,28 +27,42 @@ class _BusMarcaScreenState extends State<BusMarcaScreen> {
     super.initState();
     _cargar();
     _searchCtrl.addListener(_filtrar);
+    CatalogSignal.notifier.addListener(_onCatalogChanged);
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    CatalogSignal.notifier.removeListener(_onCatalogChanged);
     super.dispose();
   }
 
+  void _onCatalogChanged() {
+    if (mounted) {
+      _cargar(); // Vuelve a traer los modelos y las marcas actualizadas de la API
+    }
+  }
+
   Future<void> _cargar() async {
+    if (!mounted) return;
     setState(() {
       _cargando = true;
       _error = null;
     });
     try {
       final data = await BusMarcaService.getAll();
+      
+      // Guardián: Si destruiste la pantalla mientras cargaba la API
+      if (!mounted) return;
       setState(() {
         _marcas = data;
         _filtradas = data;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _cargando = false);
     }
   }
@@ -68,23 +83,28 @@ class _BusMarcaScreenState extends State<BusMarcaScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => MarcaFormSheet(marca: marca),
     );
-    if (result == null) return;
+    // Guardián: Si se cerró el modal y saliste de la pantalla al mismo tiempo
+    if (result == null || !mounted) return;
 
     try {
       if (marca == null) {
         final nueva = await BusMarcaService.create(result);
+        if (!mounted) return; // Guardián post-API
         setState(() {
           _marcas.add(nueva);
           _filtrar();
         });
+        CatalogSignal.notifyChange();
         _snack('Marca "${nueva.nombre}" creada.', success: true);
       } else {
         final actualizada = await BusMarcaService.update(marca.id, result);
+        if (!mounted) return; // Guardián post-API
         setState(() {
           final i = _marcas.indexWhere((m) => m.id == marca.id);
           if (i != -1) _marcas[i] = actualizada;
           _filtrar();
         });
+        CatalogSignal.notifyChange();
         _snack('Marca actualizada.', success: true);
       }
     } catch (e) {
@@ -95,11 +115,13 @@ class _BusMarcaScreenState extends State<BusMarcaScreen> {
   Future<void> _toggle(BusMarca marca) async {
     try {
       await BusMarcaService.toggle(marca.id);
+      if (!mounted) return; // Guardián post-API
       setState(() {
         final i = _marcas.indexWhere((m) => m.id == marca.id);
         if (i != -1) _marcas[i] = marca.copyWith(estado: !marca.estado);
         _filtrar();
       });
+      CatalogSignal.notifyChange();
       HapticFeedback.lightImpact();
     } catch (e) {
       _snack(e.toString());
@@ -228,7 +250,7 @@ class _BusMarcaScreenState extends State<BusMarcaScreen> {
           isDark: isDark,
           onEdit: () => _crearOEditar(marca: _filtradas[i]),
           onToggle: () => _toggle(_filtradas[i]),
-          onDelete: () {},
+          onDelete: () => CatalogSignal.notifyChange(),
         ),
       ),
     );

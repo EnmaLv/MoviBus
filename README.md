@@ -56,10 +56,6 @@ Nuestras prioridades actuales para optimizar el rendimiento y la experiencia de 
 
 -    [ ] **Optimización de Rendimiento (Multihilo):** Migrar el procesamiento y parsing del JSON pesado del mapa de Google a un Flutter Isolate (hilo secundario) para liberar carga del hilo principal y evitar caídas de frames.
 
--    [ ] **User Experience (UX):** Implementar un Splash Screen nativo para eliminar la pantalla en negro al inicializar el ciclo de vida de la aplicación.
-
--    [ ] **Refactorización de Modelos:** Depurar las relaciones y asignaciones de entidades en las vistas de Marcas y Modelos de vehículos.
-
 -    [ ] **Sincronización Web:** Concluir el desarrollo de maestros locales en el teléfono para iniciar las pruebas de consumo de la API Web principal de Laravel.
 
 ---

@@ -5,6 +5,7 @@ import 'model/bus_fuel_type_model.dart';
 import 'widgets/bus_fuel_type_stats_bar.dart';
 import 'widgets/bus_fuel_type_card.dart';
 import 'widgets/bus_fuel_type_formsheet.dart';
+import 'package:movibus/services/catalog_signal.dart';
 
 class BusFuelTypeScreen extends StatefulWidget {
   const BusFuelTypeScreen({super.key});
@@ -26,22 +27,36 @@ class _BusFuelTypeScreenState extends State<BusFuelTypeScreen> {
     super.initState();
     _cargar();
     _searchCtrl.addListener(_filtrar);
+    CatalogSignal.notifier.addListener(_onCatalogChanged);
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    CatalogSignal.notifier.removeListener(_onCatalogChanged);
     super.dispose();
   }
 
+  void _onCatalogChanged() {
+    if (mounted) {
+      _cargar(); 
+    }
+  }
+
   Future<void> _cargar() async {
+    if (!mounted) return;
     setState(() { _cargando = true; _error = null; });
     try {
       final data = await BusTipoCombustibleService.getAll();
+      
+      // Guardián: Si la pantalla se cerró mientras cargaba la API
+      if (!mounted) return;
       setState(() { _combustibles = data; _filtrados = data; });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _cargando = false);
     }
   }
@@ -60,7 +75,8 @@ class _BusFuelTypeScreenState extends State<BusFuelTypeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => FuelTypeFormSheet(combustible: combustible),
     );
-    if (result == null) return;
+    // Guardián: Por si el modal se cierra y destruimos la pantalla al mismo tiempo
+    if (result == null || !mounted) return;
 
     final nombre = result['nombre']!;
     final descripcion = result['descripcion']!;
@@ -68,15 +84,19 @@ class _BusFuelTypeScreenState extends State<BusFuelTypeScreen> {
     try {
       if (combustible == null) {
         final nuevo = await BusTipoCombustibleService.create(nombre, descripcion);
+        if (!mounted) return; // Guardián post-API
         setState(() { _combustibles.add(nuevo); _filtrar(); });
+        CatalogSignal.notifyChange();
         _snack('Tipo de combustible "${nuevo.nombre}" creado.', success: true);
       } else {
         final actualizado = await BusTipoCombustibleService.update(combustible.id, nombre, descripcion);
+        if (!mounted) return; // Guardián post-API
         setState(() {
           final i = _combustibles.indexWhere((c) => c.id == combustible.id);
           if (i != -1) _combustibles[i] = actualizado;
           _filtrar();
         });
+        CatalogSignal.notifyChange();
         _snack('Combustible actualizado.', success: true);
       }
     } catch (e) {
@@ -87,11 +107,13 @@ class _BusFuelTypeScreenState extends State<BusFuelTypeScreen> {
   Future<void> _toggle(BusTipoCombustible combustible) async {
     try {
       await BusTipoCombustibleService.toggle(combustible.id);
+      if (!mounted) return; // Guardián post-API
       setState(() {
         final i = _combustibles.indexWhere((c) => c.id == combustible.id);
         if (i != -1) _combustibles[i] = combustible.copyWith(estado: !combustible.estado);
         _filtrar();
       });
+      CatalogSignal.notifyChange();
       HapticFeedback.lightImpact();
     } catch (e) {
       _snack(e.toString());

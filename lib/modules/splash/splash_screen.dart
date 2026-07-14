@@ -5,6 +5,7 @@ import '../auth/login.dart';
 import '../Map/map_screen.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_bar.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 class MoviBusSplashScreen extends StatefulWidget {
   final AppThemeProvider themeProvider;
@@ -126,6 +127,7 @@ class _MoviBusSplashScreenState extends State<MoviBusSplashScreen>
   }
 
   Future<void> _runSequence() async {
+    FlutterNativeSplash.remove();
     _bgCtrl.forward();
 
     await Future.delayed(const Duration(milliseconds: 300));

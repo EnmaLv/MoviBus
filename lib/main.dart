@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'modules/splash/splash_screen.dart';
 import 'widgets/app_bar.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   final themeProvider = AppThemeProvider();
-  await themeProvider.loadPrefs();
+  themeProvider.loadPrefs();
 
   runApp(BusApp(themeProvider: themeProvider));
 }

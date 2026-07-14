@@ -44,25 +44,43 @@ class BusVehiculo {
   });
 
   factory BusVehiculo.fromJson(Map<String, dynamic> j) {
+    // Auxiliares internos para parsear números de manera 100% segura
+    double toDouble(dynamic val) {
+      if (val == null) return 0.0;
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 0.0;
+      return 0.0;
+    }
+
+    int toInt(dynamic val) {
+      if (val == null) return 0;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
     return BusVehiculo(
-      id: j['id'] as int,
+      id: toInt(j['id']),
       placa: j['placa'] as String? ?? '',
-      modeloId: j['modelo_id'] as int,
+      modeloId: toInt(j['modelo_id']),
       modeloNombre: j['modelo']?['nombre'] as String? ?? 'Desconocido',
-      marcaNombre: j['modelo']?['bus_marca']?['nombre'] as String? ?? 
-                   j['modelo']?['marca']?['nombre'] as String? ?? '',
-      anio: j['anio'] as int,
+      marcaNombre:
+          j['modelo']?['bus_marca']?['nombre'] as String? ??
+          j['modelo']?['marca']?['nombre'] as String? ??
+          '',
+      anio: toInt(j['anio']),
       color: j['color'] as String? ?? '',
-      cantidadPasajeros: j['cantidad_pasajeros'] as int,
-      tipoCombustibleId: j['tipo_combustible_id'] as int,
-      combustibleNombre: j['tipo_combustible']?['nombre'] as String? ?? 'Desconocido',
-      cantidadBocas: j['cantidad_bocas'] as int,
-      capacidadTanqueLitros: (j['capacidad_tanque_litros'] as num).toDouble(),
-      consumoLitrosKm: (j['consumo_litros_km'] as num).toDouble(),
-      kmActual: (j['km_actual'] as num).toDouble(),
-      kmProximoMantenimiento: (j['km_proximo_mantenimiento'] as num).toDouble(),
-      conductorId: j['conductor_id'] as int?,
-      sucursalId: j['sucursal_id'] as int,
+      cantidadPasajeros: toInt(j['cantidad_pasajeros']),
+      tipoCombustibleId: toInt(j['tipo_combustible_id']),
+      combustibleNombre:
+          j['tipo_combustible']?['nombre'] as String? ?? 'Desconocido',
+      cantidadBocas: toInt(j['cantidad_bocas']),
+      capacidadTanqueLitros: toDouble(j['capacidad_tanque_litros']),
+      consumoLitrosKm: toDouble(j['consumo_litros_km']),
+      kmActual: toDouble(j['km_actual']),
+      kmProximoMantenimiento: toDouble(j['km_proximo_mantenimiento']),
+      conductorId: j['conductor_id'] != null ? toInt(j['conductor_id']) : null,
+      sucursalId: toInt(j['sucursal_id']),
       sucursalNombre: j['sucursal']?['nombre'] as String? ?? 'Matriz',
       activo: j['activo'] == true || j['activo'] == 1,
       estado: j['estado'] as String? ?? 'disponible',
@@ -101,10 +119,12 @@ class BusVehiculo {
       tipoCombustibleId: tipoCombustibleId ?? this.tipoCombustibleId,
       combustibleNombre: combustibleNombre ?? this.combustibleNombre,
       cantidadBocas: cantidadBocas ?? this.cantidadBocas,
-      capacidadTanqueLitros: capacidadTanqueLitros ?? this.capacidadTanqueLitros,
+      capacidadTanqueLitros:
+          capacidadTanqueLitros ?? this.capacidadTanqueLitros,
       consumoLitrosKm: consumoLitrosKm ?? this.consumoLitrosKm,
       kmActual: kmActual ?? this.kmActual,
-      kmProximoMantenimiento: kmProximoMantenimiento ?? this.kmProximoMantenimiento,
+      kmProximoMantenimiento:
+          kmProximoMantenimiento ?? this.kmProximoMantenimiento,
       conductorId: conductorId,
       sucursalId: sucursalId ?? this.sucursalId,
       sucursalNombre: sucursalNombre ?? this.sucursalNombre,
