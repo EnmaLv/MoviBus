@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'modules/splash/splash_screen.dart';
 import 'widgets/app_bar.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 void main() async {
+  // 1. Asegurar la vinculación de los bindings de Flutter
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  final themeProvider = AppThemeProvider();
-  themeProvider.loadPrefs();
 
+  // 2. Inicializar Firebase con las opciones de la plataforma actual (Android/iOS)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // 3. Cargar preferencias del tema
+  final themeProvider = AppThemeProvider();
+  await themeProvider.loadPrefs();
+
+  // 4. Iniciar la aplicación
   runApp(BusApp(themeProvider: themeProvider));
 }
 

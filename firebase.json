@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"android":{"default":{"projectId":"movibus-uptp","appId":"1:692788093576:android:1114d879d97c7f4845753d","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"movibus-uptp","configurations":{"android":"1:692788093576:android:1114d879d97c7f4845753d","ios":"1:692788093576:ios:763a39667c7ed90145753d"}}}}}}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "692788093576",
+    "project_id": "movibus-uptp",
+    "storage_bucket": "movibus-uptp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:692788093576:android:1114d879d97c7f4845753d",
+        "android_client_info": {
+          "package_name": "com.example.transporte_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIjcUXCHXbbT2Pn5ixzMJ5dCwmmtCaaUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
