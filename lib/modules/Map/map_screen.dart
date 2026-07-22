@@ -1,26 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../modules/Map/models/bus_model.dart';
 import '../../services/api_service.dart';
+import '../Bus/bus_catalogo_screen.dart';
 import '../auth/login.dart';
 import '../../widgets/app_bar.dart';
-import 'models/bus_model.dart';
-import 'data/buses_mock.dart';
-import '../../widgets/bus_info_card.dart';
 import '../../widgets/top_overlay.dart';
 import '../../widgets/start_route_button.dart';
-import '../Bus/bus_catalogo_screen.dart';
+import 'services/osrm_streets.dart';
 import 'services/tracking_service.dart';
-
-const _demoOrigen = LatLng(9.546987, -69.192543);
-const _demoDestino = LatLng(9.554500, -69.183500);
 
 class MoviMap extends StatefulWidget {
   final Map<String, dynamic> usuario;
@@ -38,319 +32,389 @@ class MoviMap extends StatefulWidget {
   State<MoviMap> createState() => _MoviMapState();
 }
 
-// OPTIMIZACIÓN: Se eliminó TickerProviderStateMixin porque el controlador de pulso no se usaba aquí
-class _MoviMapState extends State<MoviMap> {
+class _MoviMapState extends State<MoviMap> with WidgetsBindingObserver {
   static const _red = Color(0xFFB71C1C);
 
   int _currentIndex = 0;
-  GoogleMapController? mapController;
-  BitmapDescriptor? _busMovingIcon;
-  BitmapDescriptor? _busStoppedIcon;
-  BusEnMapa? _busSeleccionado;
-
+  final MapController _mapController = MapController();
   final TrackingService _trackingService = TrackingService();
 
-  // OPTIMIZACIÓN: Variables de control de rendimiento
+  // Suscripción a Cloud Firestore
+  StreamSubscription<QuerySnapshot>? _firestoreSubscription;
+  Map<String, BusEnMapa> _busesActivosFirebase = {};
+
   bool _mapaListo = false;
-  Set<Marker> _markersCache = {};
-  Set<Polyline> _polylinesCache = {};
+  List<Marker> _markers = [];
+  List<Polyline> _polylines = [];
 
   bool _trackingActivo = false;
-  bool _esModoDemo = false;
   bool _cargandoRuta = false;
+  String? _viajeIdActivo;
+  String _miPlaca = 'S/N';
   LatLng? _miUbicacion;
-  Timer? _demoTimer;
-  int _demoPuntoActual = 0;
+  LatLng _centroInicial = const LatLng(9.546987, -69.192543);
+
+  // Paradas dinámicas obtenidas desde Laravel
+  List<Map<String, dynamic>> _paradasRuta = [];
+  LatLng? _destinoFinalReal;
+
+  int _indicePuntoActual = 0;
   List<LatLng> _rutaCalles = [];
 
-  final CameraPosition _initialPosition = const CameraPosition(
-    target: LatLng(9.546987, -69.192543),
-    zoom: 15,
-  );
+  static const _radioLlegada = 50.0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _inicializarPantalla();
-  }
-
-  Future<void> _inicializarPantalla() async {
-    await _crearIconos();
-
-    // OPTIMIZACIÓN: Retrasar la renderización del mapa 450ms para que las transiciones de pantalla vayan suaves
-    await Future.delayed(const Duration(milliseconds: 450));
-    if (mounted) {
-      setState(() {
-        _mapaListo = true;
-      });
-    }
+    _escucharBusesEnTiempoRealFirestore();
   }
 
   @override
   void dispose() {
-    _demoTimer?.cancel();
-    _trackingService.detenerTracking();
+    WidgetsBinding.instance.removeObserver(this);
+    _firestoreSubscription?.cancel();
+    _trackingService.detenerTracking(_viajeIdActivo);
+    _mapController.dispose();
     super.dispose();
   }
 
-  Future<void> _crearIconos() async {
-    _busMovingIcon = await _buildBusIcon(moving: true);
-    _busStoppedIcon = await _buildBusIcon(moving: false);
-    _actualizarElementosVisualesDelMapa();
+  // Detectar cambios en el ciclo de vida de la aplicación
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // Si el SO fuerza el cierre de la app, intentamos detener el tracking
+      if (_trackingActivo && _viajeIdActivo != null) {
+        _trackingService.detenerTracking(_viajeIdActivo);
+      }
+    }
   }
 
-  Future<BitmapDescriptor> _buildBusIcon({required bool moving}) async {
-    const size = 60.0;
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    final tp = TextPainter(
-      text: TextSpan(
-        text: moving ? '🚎' : '🚌',
-        style: const TextStyle(fontSize: 32),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    tp.layout();
-    tp.paint(canvas, Offset(30 - tp.width / 2, 30 - tp.height / 2));
-    final img = await recorder.endRecording().toImage(
-      size.toInt(),
-      size.toInt(),
-    );
-    final data = await img.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.bytes(data!.buffer.asUint8List());
+  void _escucharBusesEnTiempoRealFirestore() {
+    _firestoreSubscription = FirebaseFirestore.instance
+        .collection('buses_activos')
+        .snapshots()
+        .listen((snapshot) {
+          if (!mounted) return;
+
+          final Map<String, BusEnMapa> busesCargados = {};
+          final ahora = DateTime.now();
+
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+
+            // Descartar buses inactivos por más de 3 minutos (Buses Fantasma)
+            final Timestamp? ultimaAct =
+                data['ultima_actualizacion'] as Timestamp?;
+            if (ultimaAct != null) {
+              final diferencia = ahora.difference(ultimaAct.toDate()).inMinutes;
+              if (diferencia > 3) continue;
+            }
+
+            busesCargados[doc.id] = BusEnMapa.fromFirestore(doc.id, data);
+          }
+
+          setState(() {
+            _busesActivosFirebase = busesCargados;
+          });
+          _actualizarElementosVisualesDelMapa();
+        });
   }
 
-  // OPTIMIZACIÓN CENTRAL: Reemplaza los Getters pesados.
-  // Crea los marcadores y polilíneas en memoria local solo cuando hay cambios reales.
-  void _actualizarElementosVisualesDelMapa() {
-    if (!mounted) return;
+  Future<void> _inicializarPantalla() async {
+    await _obtenerUbicacionInicialUsuario();
 
-    // 1. Construir Marcadores alternos
-    final nuevosMarkers = <Marker>{};
-    for (final bus in busesSimulados) {
-      nuevosMarkers.add(
-        Marker(
-          markerId: MarkerId(bus.id),
-          position: bus.posicion,
-          icon: bus.enMovimiento
-              ? (_busMovingIcon ??
-                    BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueRed,
-                    ))
-              : (_busStoppedIcon ??
-                    BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueAzure,
-                    )),
-          onTap: () => _mostrarInfoBus(bus),
+    if (mounted) {
+      setState(() {
+        _mapaListo = true;
+      });
+      // Verificación automática de viaje activo al iniciar
+      await _verificarYRestaurarViajeActivo();
+    }
+  }
+
+  /// Verifica en Laravel si hay un viaje 'en_curso' y recupera el mapa y la transmisión
+  Future<void> _verificarYRestaurarViajeActivo() async {
+    try {
+      final responseActive = await ApiService.get('/mi-viaje-activo');
+      if (responseActive['data'] != null) {
+        final viajeData = responseActive['data'];
+        final String estadoActual = viajeData['estado'] ?? '';
+
+        if (estadoActual == 'en_curso') {
+          debugPrint("Viaje 'en_curso' detectado. Restaurando ruta...");
+          await _procesarEIniciarRuta(viajeData, esRestauracion: true);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error al verificar viaje activo: $e");
+    }
+  }
+
+  Future<LatLng?> _obtenerPosicionGPS() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
         ),
       );
+      return LatLng(position.latitude, position.longitude);
+    } catch (e) {
+      try {
+        final lastPosition = await Geolocator.getLastKnownPosition();
+        if (lastPosition != null) {
+          return LatLng(lastPosition.latitude, lastPosition.longitude);
+        }
+      } catch (_) {}
+
+      if (_miUbicacion != null) return _miUbicacion;
+      return null;
+    }
+  }
+
+  Future<void> _obtenerUbicacionInicialUsuario() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      final posLatLng = await _obtenerPosicionGPS();
+
+      if (posLatLng != null && mounted) {
+        setState(() {
+          _miUbicacion = posLatLng;
+          _centroInicial = posLatLng;
+        });
+        _mapController.move(posLatLng, 15.0);
+      }
+    } catch (e) {
+      debugPrint("No se pudo obtener la ubicación GPS inicial: $e");
+    }
+  }
+
+  void _mostrarInfoParada(int numero, String nombre) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '$numero',
+                  style: TextStyle(
+                    color: Colors.blue.shade900,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Parada $numero: $nombre',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blue.shade900,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _actualizarElementosVisualesDelMapa() {
+    if (!mounted) return;
+    final nuevosMarkers = <Marker>[];
+
+    // 1. Renderizar paradas como CÍRCULOS NUMERADOS con acción al pulsar
+    for (int i = 0; i < _paradasRuta.length; i++) {
+      final parada = _paradasRuta[i];
+      final lat = double.tryParse(
+        parada['lat']?.toString() ?? parada['latitud']?.toString() ?? '',
+      );
+      final lng = double.tryParse(
+        parada['lng']?.toString() ?? parada['longitud']?.toString() ?? '',
+      );
+
+      if (lat != null && lng != null) {
+        final nombreParada = parada['nombre'] ?? 'Parada ${i + 1}';
+
+        nuevosMarkers.add(
+          Marker(
+            point: LatLng(lat, lng),
+            width: 32,
+            height: 32,
+            child: GestureDetector(
+              onTap: () => _mostrarInfoParada(i + 1, nombreParada),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade900,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    '${i + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
     }
 
+    // 2. Renderizar otros buses activos de Firestore
+    _busesActivosFirebase.forEach((id, bus) {
+      if (id == _viajeIdActivo) return;
+
+      nuevosMarkers.add(
+        Marker(
+          point: bus.posicion,
+          width: 80,
+          height: 60,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade800,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  bus.placa,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Icon(Icons.directions_bus, color: Colors.blue, size: 28),
+            ],
+          ),
+        ),
+      );
+    });
+
+    // 3. Renderizar mi propio bus con su placa
     if (_miUbicacion != null) {
       nuevosMarkers.add(
         Marker(
-          markerId: const MarkerId('mi_bus'),
-          position: _miUbicacion!,
-          icon:
-              _busMovingIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: 'Mi Bus'),
-          zIndex: 2,
+          point: _miUbicacion!,
+          width: 90,
+          height: 65,
+          child: _buildMiBusMarkerWidget(),
         ),
       );
     }
 
-    if (_trackingActivo && _rutaCalles.isNotEmpty) {
-      nuevosMarkers.add(
-        Marker(
-          markerId: const MarkerId('ruta_inicio'),
-          position: _rutaCalles.first,
-          infoWindow: const InfoWindow(title: 'Salida'),
-        ),
-      );
-      nuevosMarkers.add(
-        Marker(
-          markerId: const MarkerId('ruta_fin'),
-          position: _esModoDemo ? _rutaCalles.last : _destinoReal,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          ),
-          infoWindow: const InfoWindow(title: 'Destino · UPTP'),
-        ),
-      );
-    }
-
-    // 2. Construir Polilíneas alternas
-    final nuevasPolylines = <Polyline>{};
+    final nuevasPolylines = <Polyline>[];
     if (_trackingActivo && _rutaCalles.isNotEmpty) {
       final total = _rutaCalles.length;
+
+      // Ruta completa (sombreada)
       nuevasPolylines.add(
         Polyline(
-          polylineId: const PolylineId('ruta_completa'),
           points: _rutaCalles,
+          strokeWidth: 5.0,
           color: _red.withValues(alpha: 0.35),
-          width: 5, // Ligeramente más delgado para reducir carga geométrica
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-          jointType: JointType.round,
         ),
       );
-      if (_demoPuntoActual > 0) {
+
+      // Tramo recorrido (rojo intenso)
+      if (_indicePuntoActual > 0) {
         nuevasPolylines.add(
           Polyline(
-            polylineId: const PolylineId('ruta_recorrida'),
-            points: _rutaCalles.sublist(0, _demoPuntoActual.clamp(1, total)),
+            points: _rutaCalles.sublist(0, _indicePuntoActual.clamp(1, total)),
+            strokeWidth: 5.0,
             color: _red,
-            width: 5,
-            startCap: Cap.roundCap,
-            endCap: Cap.roundCap,
-            jointType: JointType.round,
           ),
         );
       }
     }
 
     setState(() {
-      _markersCache = nuevosMarkers;
-      _polylinesCache = nuevasPolylines;
+      _markers = nuevosMarkers;
+      _polylines = nuevasPolylines;
     });
   }
 
-  Future<List<LatLng>> _obtenerRutaCalles(LatLng origen, LatLng destino) async {
-    final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/'
-      '${origen.longitude},${origen.latitude};'
-      '${destino.longitude},${destino.latitude}'
-      '?overview=full&geometries=geojson',
-    );
-
-    try {
-      final response = await http
-          .get(url, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) return _rutaFallback();
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = data['code'] as String?;
-      if (code != 'Ok') return _rutaFallback();
-
-      final routes = data['routes'] as List?;
-      if (routes == null || routes.isEmpty) return _rutaFallback();
-
-      final coords = routes[0]['geometry']['coordinates'] as List;
-      return coords.map((c) {
-        final punto = c as List;
-        return LatLng(
-          (punto[1] as num).toDouble(),
-          (punto[0] as num).toDouble(),
-        );
-      }).toList();
-    } catch (e) {
-      debugPrint('OSRM error: $e');
-      return _rutaFallback();
-    }
-  }
-
-  List<LatLng> _rutaFallback() {
-    const pasos = 20;
-    return List.generate(pasos + 1, (i) {
-      final t = i / pasos;
-      return LatLng(
-        _demoOrigen.latitude +
-            (_demoDestino.latitude - _demoOrigen.latitude) * t,
-        _demoOrigen.longitude +
-            (_demoDestino.longitude - _demoOrigen.longitude) * t,
-      );
-    });
-  }
-
-  Future<void> _iniciarDemo() async {
-    setState(() => _cargandoRuta = true);
-
-    final puntos = await _obtenerRutaCalles(_demoOrigen, _demoDestino);
-    if (!mounted) return;
-
-    _rutaCalles = puntos;
-    _esModoDemo = true;
-    _trackingActivo = true;
-    _demoPuntoActual = 0;
-    _miUbicacion = puntos.first;
-    _cargandoRuta = false;
-
-    _actualizarElementosVisualesDelMapa();
-
-    mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: puntos.first, zoom: 16),
-      ),
-    );
-
-    // OPTIMIZACIÓN: Cambiado de 300ms a 450ms. Sigue viéndose fluido pero reduce un 50% el estrés del procesador.
-    _demoTimer = Timer.periodic(const Duration(milliseconds: 450), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      if (_demoPuntoActual >= _rutaCalles.length - 1) {
-        timer.cancel();
-        _llegarAlDestino();
-        return;
-      }
-
-      _demoPuntoActual++;
-      _miUbicacion = _rutaCalles[_demoPuntoActual];
-
-      _actualizarElementosVisualesDelMapa();
-
-      mapController?.animateCamera(
-        CameraUpdate.newLatLng(_rutaCalles[_demoPuntoActual]),
-      );
-    });
-  }
-
-  void _llegarAlDestino() {
-    if (!mounted) return;
-    _trackingActivo = false;
-    _esModoDemo = false;
-    _miUbicacion = null;
-    _rutaCalles = [];
-    _demoPuntoActual = 0;
-
-    _actualizarElementosVisualesDelMapa();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 10),
-            Text('¡Ruta completada exitosamente!'),
-          ],
+  Widget _buildMiBusMarkerWidget() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _trackingActivo ? Colors.green.shade800 : _red,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 3,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Text(
+            _miPlaca,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        backgroundColor: const Color(0xFF2E7D32),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+        const SizedBox(height: 2),
+        Icon(
+          Icons.directions_bus_filled,
+          color: _trackingActivo ? Colors.green : _red,
+          size: 32,
+        ),
+      ],
     );
   }
 
-  void _cancelarRuta() {
-    _demoTimer?.cancel();
-    _trackingService.detenerTracking();
-    _trackingActivo = false;
-    _esModoDemo = false;
-    _miUbicacion = null;
-    _demoPuntoActual = 0;
-    _rutaCalles = [];
-    _actualizarElementosVisualesDelMapa();
-  }
-
-  static const _destinoReal = LatLng(9.546987, -69.192543);
-  static const _radioLlegada = 50.0;
-
-  Future<void> _iniciarRutaReal() async {
+  Future<void> _iniciarRuta() async {
     final ok = await _trackingService.solicitarPermisos();
     if (!mounted) return;
 
@@ -361,69 +425,263 @@ class _MoviMapState extends State<MoviMap> {
       return;
     }
 
-    setState(() {
-      _cargandoRuta = true;
-      _esModoDemo = false;
-    });
+    setState(() => _cargandoRuta = true);
 
-    Position? posActual;
     try {
-      posActual = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+      final responseActive = await ApiService.get('/mi-viaje-activo');
+
+      Map<String, dynamic>? viajeData;
+      if (responseActive['data'] != null) {
+        viajeData = responseActive['data'];
+      }
+
+      if (viajeData == null) {
+        if (!mounted) return;
+        setState(() => _cargandoRuta = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No tienes ningún viaje asignado o programado.'),
+          ),
+        );
+        return;
+      }
+
+      await _procesarEIniciarRuta(viajeData, esRestauracion: false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cargandoRuta = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al iniciar viaje: $e')));
+      }
+    }
+  }
+
+  /// Procesa los datos del viaje, traza la ruta OSRM e inicia el tracking GPS
+  Future<void> _procesarEIniciarRuta(
+    Map<String, dynamic> viajeData, {
+    required bool esRestauracion,
+  }) async {
+    final String viajeId = viajeData['id'].toString();
+    final String placa = viajeData['vehiculo']?['placa'] ?? 'S/N';
+    final String rutaNombre = viajeData['bus_ruta']?['nombre'] ?? 'Sin Ruta';
+    final String estadoActual = viajeData['estado'] ?? 'programado';
+
+    final List<dynamic> paradasRaw = viajeData['bus_ruta']?['paradas'] ?? [];
+    final List<Map<String, dynamic>> paradasCargadas = [];
+
+    for (var p in paradasRaw) {
+      if (p is Map<String, dynamic>) {
+        paradasCargadas.add(p);
+      }
+    }
+
+    // Notificar a Laravel solo si no estaba 'en_curso'
+    if (estadoActual == 'programado' && !esRestauracion) {
+      await ApiService.post('/viajes/$viajeId/iniciar', {});
+    }
+
+    final origen = await _obtenerPosicionGPS();
+    if (!mounted) return;
+
+    if (origen == null) {
+      setState(() => _cargandoRuta = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo determinar tu posición GPS actual.'),
         ),
-      ).timeout(const Duration(seconds: 10));
-    } catch (_) {}
+      );
+      return;
+    }
 
+    final List<LatLng> secuenciaRuta = [origen];
+    for (var p in paradasCargadas) {
+      final lat = double.tryParse(
+        p['lat']?.toString() ?? p['latitud']?.toString() ?? '',
+      );
+      final lng = double.tryParse(
+        p['lng']?.toString() ?? p['longitud']?.toString() ?? '',
+      );
+      if (lat != null && lng != null) {
+        secuenciaRuta.add(LatLng(lat, lng));
+      }
+    }
+
+    LatLng destinoFinal = origen;
+    if (secuenciaRuta.length > 1) {
+      destinoFinal = secuenciaRuta.last;
+    }
+
+    final puntos = await obtenerRutaCalles(secuenciaRuta);
     if (!mounted) return;
 
-    final origen = posActual != null
-        ? LatLng(posActual.latitude, posActual.longitude)
-        : _destinoReal;
-    final puntos = await _obtenerRutaCalles(origen, _destinoReal);
-    if (!mounted) return;
-
+    _viajeIdActivo = viajeId;
+    _miPlaca = placa;
+    _paradasRuta = paradasCargadas;
+    _destinoFinalReal = destinoFinal;
     _rutaCalles = puntos;
     _trackingActivo = true;
     _miUbicacion = origen;
-    _demoPuntoActual = 0;
+    _indicePuntoActual = 0;
     _cargandoRuta = false;
 
     _actualizarElementosVisualesDelMapa();
 
-    if (puntos.length > 1) {
-      final bounds = _calcularBounds(puntos);
-      mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
+    if (puntos.isNotEmpty) {
+      final bounds = LatLngBounds.fromPoints(puntos);
+      if (bounds.northEast != bounds.southWest) {
+        _mapController.fitCamera(
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60.0)),
+        );
+      } else {
+        _mapController.move(puntos.first, 16.0);
+      }
     }
 
-    _trackingService.iniciarTracking((pos) {
-      if (!mounted) return;
-      final nuevaPos = LatLng(pos.latitude, pos.longitude);
+    // Iniciar transmisión continua del GPS
+    _trackingService.iniciarTracking(
+      viajeId: viajeId,
+      placa: placa,
+      rutaNombre: rutaNombre,
+      sede: 'UPTP',
+      onPositionChanged: (pos) {
+        if (!mounted) return;
+        final nuevaPos = LatLng(pos.latitude, pos.longitude);
 
-      _miUbicacion = nuevaPos;
-      _demoPuntoActual = _puntoMasCercano(nuevaPos);
+        _miUbicacion = nuevaPos;
+        _indicePuntoActual = _puntoMasCercano(nuevaPos);
 
-      _actualizarElementosVisualesDelMapa();
-      mapController?.animateCamera(CameraUpdate.newLatLng(nuevaPos));
+        _actualizarElementosVisualesDelMapa();
+        _mapController.move(nuevaPos, _mapController.camera.zoom);
 
-      final distancia = Geolocator.distanceBetween(
-        nuevaPos.latitude,
-        nuevaPos.longitude,
-        _destinoReal.latitude,
-        _destinoReal.longitude,
+        if (_destinoFinalReal != null) {
+          final distancia = Geolocator.distanceBetween(
+            nuevaPos.latitude,
+            nuevaPos.longitude,
+            _destinoFinalReal!.latitude,
+            _destinoFinalReal!.longitude,
+          );
+
+          if (distancia <= _radioLlegada) {
+            _finalizarRutaEnLaravel(viajeId);
+          }
+        }
+      },
+    );
+
+    if (esRestauracion && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ruta restaurada automáticamente.'),
+          backgroundColor: Colors.blue,
+        ),
       );
-      if (distancia <= _radioLlegada) {
-        _trackingService.detenerTracking();
-        _llegarAlDestino();
-      }
-    });
+    }
+  }
+
+  Future<void> _finalizarRutaEnLaravel(String viajeId) async {
+    await _trackingService.detenerTracking(viajeId);
+
+    try {
+      await ApiService.post('/viajes/$viajeId/finalizar', {
+        'km_fin': 1000,
+        'pasajeros': 10,
+        'litros_gastados': 0,
+        'hubo_desvio': false,
+      });
+    } catch (e) {
+      debugPrint("Error finalizando en Laravel: $e");
+    }
+
+    _llegarAlDestino();
+  }
+
+  void _llegarAlDestino() {
+    if (!mounted) return;
+    _trackingActivo = false;
+    _rutaCalles = [];
+    _paradasRuta = [];
+    _indicePuntoActual = 0;
+    _viajeIdActivo = null;
+
+    _actualizarElementosVisualesDelMapa();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 10),
+            Text('¡Ruta completada e informada al sistema!'),
+          ],
+        ),
+        backgroundColor: const Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _cancelarRuta() {
+    _trackingService.detenerTracking(_viajeIdActivo);
+    _trackingActivo = false;
+    _indicePuntoActual = 0;
+    _rutaCalles = [];
+    _paradasRuta = [];
+    _viajeIdActivo = null;
+    _actualizarElementosVisualesDelMapa();
+  }
+
+  /// Cierre de sesión limpio deteniendo la señal GPS previamente
+  Future<void> _cerrarSesionSegura() async {
+    if (_trackingActivo && _viajeIdActivo != null) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ruta en Curso'),
+          content: const Text(
+            'Tienes un viaje activo. Si cierras sesión, la transmisión GPS se detendrá. ¿Deseas salir?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text(
+                'Cerrar Sesión',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmar != true) return;
+
+      // Detener transmisión y borrar de Firestore antes de salir
+      await _trackingService.detenerTracking(_viajeIdActivo);
+    }
+
+    await ApiService.logout();
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LoginScreen(themeProvider: widget.themeProvider),
+        ),
+      );
+    }
   }
 
   int _puntoMasCercano(LatLng pos) {
     if (_rutaCalles.isEmpty) return 0;
-    int mejor = _demoPuntoActual;
+    int mejor = _indicePuntoActual;
     double menorDist = double.infinity;
-    for (int i = _demoPuntoActual; i < _rutaCalles.length; i++) {
+    for (int i = _indicePuntoActual; i < _rutaCalles.length; i++) {
       final d = Geolocator.distanceBetween(
         pos.latitude,
         pos.longitude,
@@ -438,28 +696,6 @@ class _MoviMapState extends State<MoviMap> {
     return mejor;
   }
 
-  LatLngBounds _calcularBounds(List<LatLng> puntos) {
-    double minLat = puntos.first.latitude, maxLat = puntos.first.latitude;
-    double minLng = puntos.first.longitude, maxLng = puntos.first.longitude;
-    for (final p in puntos) {
-      if (p.latitude < minLat) minLat = p.latitude;
-      if (p.latitude > maxLat) maxLat = p.latitude;
-      if (p.longitude < minLng) minLng = p.longitude;
-      if (p.longitude > maxLng) maxLng = p.longitude;
-    }
-    return LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
-  }
-
-  void _mostrarInfoBus(BusEnMapa bus) {
-    setState(() => _busSeleccionado = bus);
-    HapticFeedback.lightImpact();
-  }
-
-  void _cerrarInfoBus() => setState(() => _busSeleccionado = null);
-
   bool get _esAdmin => widget.roles.any((r) {
     final nombre = (r['nombre'] ?? '').toString().toLowerCase();
     final slug = (r['slug'] ?? '').toString().toLowerCase();
@@ -468,6 +704,7 @@ class _MoviMapState extends State<MoviMap> {
 
   String? get _rolNombre =>
       widget.roles.isEmpty ? null : widget.roles.first['nombre'] as String?;
+
   List<NavItem> get _navItems => _esAdmin ? _adminItems : _conductorItems;
 
   static const _conductorItems = [
@@ -520,10 +757,7 @@ class _MoviMapState extends State<MoviMap> {
 
   void _onNavTap(int index) {
     if (index == 0) {
-      setState(() {
-        _currentIndex = 0;
-        _busSeleccionado = null;
-      });
+      setState(() => _currentIndex = 0);
       return;
     }
     if (_esAdmin) {
@@ -563,7 +797,6 @@ class _MoviMapState extends State<MoviMap> {
   }
 
   Widget _buildMapPage() {
-    // OPTIMIZACIÓN: Si el delay no ha terminado, mostramos una linda pantalla de carga intermedia
     if (!_mapaListo) {
       return const Center(
         child: Column(
@@ -582,20 +815,19 @@ class _MoviMapState extends State<MoviMap> {
 
     return Stack(
       children: [
-        // OPTIMIZACIÓN: RepaintBoundary aísla completamente los movimientos del mapa de los componentes Flutter
-        RepaintBoundary(
-          child: GoogleMap(
-            initialCameraPosition: _initialPosition,
-            onMapCreated: (c) => mapController = c,
-            mapType: MapType.normal,
-            markers: _markersCache, // Usa la caché del estado limpio
-            polylines: _polylinesCache, // Usa la caché del estado limpio
-            onTap: (_) => _cerrarInfoBus(),
-            padding: const EdgeInsets.only(bottom: 80),
-            indoorViewEnabled: false,
-          ),
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(initialCenter: _centroInicial, initialZoom: 15.0),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.transporte_app',
+              evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+            ),
+            if (_polylines.isNotEmpty) PolylineLayer(polylines: _polylines),
+            MarkerLayer(markers: _markers),
+          ],
         ),
-
         if (_cargandoRuta)
           Container(
             color: Colors.black.withValues(alpha: 0.3),
@@ -608,33 +840,21 @@ class _MoviMapState extends State<MoviMap> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 12),
-                      Text('Calculando ruta por calles...'),
+                      Text('Conectando viaje y calculando ruta...'),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-
-        if (_busSeleccionado != null)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: BusInfoCard(bus: _busSeleccionado!, onClose: _cerrarInfoBus),
-          ),
-
-        if (_busSeleccionado == null && !_cargandoRuta)
+        if (!_cargandoRuta)
           Positioned(
             left: 16,
             right: 16,
             bottom: 16,
             child: _trackingActivo
                 ? CancelarRutaButton(onTap: _cancelarRuta)
-                : IniciarRutaPanel(
-                    onDemo: _iniciarDemo,
-                    onReal: _iniciarRutaReal,
-                  ),
+                : IniciarRutaPanel(onReal: _iniciarRuta),
           ),
       ],
     );
@@ -655,9 +875,8 @@ class _MoviMapState extends State<MoviMap> {
               child: TopOverlay(
                 usuario: widget.usuario,
                 esAdmin: _esAdmin,
-                busesActivos: busesSimulados
-                    .where((b) => b.enMovimiento)
-                    .length,
+                busesActivos:
+                    _busesActivosFirebase.length + (_trackingActivo ? 1 : 0),
               ),
             ),
         ],
@@ -669,62 +888,7 @@ class _MoviMapState extends State<MoviMap> {
         themeProvider: widget.themeProvider,
         userName: widget.usuario['nombre'] as String?,
         userRole: _rolNombre,
-        onLogout: () async {
-          await ApiService.logout();
-          if (context.mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    LoginScreen(themeProvider: widget.themeProvider),
-              ),
-            );
-          }
-        },
-      ),
-    );
-  }
-}
-
-// Nota: El widget _PulseDot se mantiene igual ya que maneja su propia animación aislada correctamente.
-class _PulseDot extends StatefulWidget {
-  const _PulseDot();
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-        ),
+        onLogout: _cerrarSesionSegura,
       ),
     );
   }

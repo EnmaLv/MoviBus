@@ -38,8 +38,6 @@ class ApiService {
     'message': 'Error de conexión. Verifica tu red.',
   };
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-
   static Future<Map<String, dynamic>> login(
     String email,
     String password,
@@ -93,26 +91,21 @@ class ApiService {
             )
             .timeout(const Duration(seconds: 10));
       } catch (_) {
-        // Si falla la petición igual limpiamos localmente
       }
     }
 
-    // Borra sesión pero preserva dark_mode para que persista entre sesiones
     await prefs.remove('token');
     await prefs.remove('usuario');
     await prefs.remove('roles');
     await prefs.remove('modulos');
   }
 
-  // NUEVO MÉTODO: Verifica si hay sesión local y reconstruye los datos
   static Future<Map<String, dynamic>?> getSavedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
       final usuarioStr = prefs.getString('usuario');
       final rolesStr = prefs.getString('roles');
-
-      // Si tenemos el token y los datos esenciales del usuario, hay sesión activa
       if (token != null && usuarioStr != null && rolesStr != null) {
         return {
           'success': true,
@@ -126,8 +119,6 @@ class ApiService {
     return null;
   }
 
-  // ── GET ───────────────────────────────────────────────────────────────────
-
   static Future<Map<String, dynamic>> get(String endpoint) async {
     try {
       final response = await http
@@ -138,8 +129,6 @@ class ApiService {
       return _connectionError(e);
     }
   }
-
-  // ── POST ──────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> post(
     String endpoint,
@@ -159,8 +148,6 @@ class ApiService {
     }
   }
 
-  // ── PUT ───────────────────────────────────────────────────────────────────
-
   static Future<Map<String, dynamic>> put(
     String endpoint,
     Map<String, dynamic> body,
@@ -179,8 +166,6 @@ class ApiService {
     }
   }
 
-  // ── PATCH ─────────────────────────────────────────────────────────────────
-
   static Future<Map<String, dynamic>> patch(
     String endpoint,
     Map<String, dynamic> body,
@@ -198,8 +183,6 @@ class ApiService {
       return _connectionError(e);
     }
   }
-
-  // ── DELETE ────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> delete(String endpoint) async {
     try {

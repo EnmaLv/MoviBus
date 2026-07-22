@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 class IniciarRutaPanel extends StatelessWidget {
-  final VoidCallback onDemo;
   final VoidCallback onReal;
-  const IniciarRutaPanel({super.key, required this.onDemo, required this.onReal});
+  const IniciarRutaPanel({super.key, required this.onReal});
 
   @override
   Widget build(BuildContext context) {
@@ -16,12 +15,6 @@ class IniciarRutaPanel extends StatelessWidget {
           onTap: onReal,
         ),
         const SizedBox(height: 8),
-        _RutaBtn(
-          label: 'MODO DEMO',
-          icon: Icons.play_circle_outline_rounded,
-          color: const Color(0xFF424242),
-          onTap: onDemo,
-        ),
       ],
     );
   }

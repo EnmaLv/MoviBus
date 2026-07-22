@@ -1,5 +1,5 @@
+import 'package:latlong2/latlong.dart';
 import '../models/bus_model.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 const busesSimulados = [
   BusEnMapa(
@@ -9,6 +9,7 @@ const busesSimulados = [
     posicion: LatLng(9.548200, -69.190100),
     enMovimiento: true,
     pasajeros: 12,
+    sede: 'Acarigua',
   ),
   BusEnMapa(
     id: 'bus_2',
@@ -17,13 +18,15 @@ const busesSimulados = [
     posicion: LatLng(9.545500, -69.194800),
     enMovimiento: false,
     pasajeros: 0,
+    sede: 'Acarigua',
   ),
   BusEnMapa(
     id: 'bus_3',
     placa: 'IJ-789-KL',
-    rutaNombre: 'Sede Principal → Anexo Este',
-    posicion: LatLng(9.549800, -69.188500),
+    rutaNombre: 'Guanare Centro → Sede Guanare',
+    posicion: LatLng(9.043100, -69.748800),
     enMovimiento: true,
     pasajeros: 8,
+    sede: 'Guanare',
   ),
 ];

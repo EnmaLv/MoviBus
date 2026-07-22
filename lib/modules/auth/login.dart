@@ -15,7 +15,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  // Color institucional único para consistencia
   static const colorRed = Color(0xFFB71C1C);
 
   final _emailCtrl = TextEditingController();
@@ -92,8 +91,6 @@ class _LoginScreenState extends State<LoginScreen>
       listenable: widget.themeProvider,
       builder: (context, _) {
         final isDark = widget.themeProvider.isDark;
-
-        // Paleta de colores plana sincronizada con el estado del tema
         final colorBg = isDark
             ? const Color(0xFF121212)
             : const Color(0xFFF5F5F5);
@@ -125,7 +122,6 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
 
-                // Botón Switch flotante del tema
                 Positioned(
                   top: 16,
                   right: 20,
@@ -181,7 +177,6 @@ class _LoginScreenState extends State<LoginScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Identificador circular simple
               Container(
                 width: 80,
                 height: 80,
@@ -242,7 +237,6 @@ class _LoginScreenState extends State<LoginScreen>
                 const SizedBox(height: 20),
               ],
 
-              // Campo de Texto: Correo Electrónico (Estilo idéntico a MarcaFormSheet)
               TextField(
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
@@ -263,7 +257,6 @@ class _LoginScreenState extends State<LoginScreen>
 
               const SizedBox(height: 20),
 
-              // Campo de Texto: Contraseña (Estilo idéntico a MarcaFormSheet)
               TextField(
                 controller: _passwordCtrl,
                 obscureText: _obscure,
@@ -309,7 +302,6 @@ class _LoginScreenState extends State<LoginScreen>
 
               const SizedBox(height: 12),
 
-              // Botón de Inicio de Sesión (Estilo idéntico a MarcaFormSheet)
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -349,7 +341,6 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// ─── Componente Selector de Tema Flotante ───────────────────────────────────
 class _LoginThemeToggle extends StatelessWidget {
   final AppThemeProvider themeProvider;
   final bool isDark;
